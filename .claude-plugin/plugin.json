@@ -1,0 +1,11 @@
+{
+  "name": "your-taste",
+  "version": "0.1.0",
+  "description": "AI learns your decision-making style. Taste direction, not skill mimicry.",
+  "author": {
+    "name": "SenZhangAI"
+  },
+  "repository": "https://github.com/SenZhangAI/your-taste",
+  "license": "MIT",
+  "keywords": ["personalization", "preferences", "taste", "style"]
+}
