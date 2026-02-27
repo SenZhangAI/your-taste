@@ -2,43 +2,43 @@
 
 **AI learns your decision-making style, not your skill level.**
 
-A Claude Code plugin that observes how you interact with AI across sessions, extracts your preference patterns, and applies them automatically — so the AI gets better at working with you over time, without being told.
+A Claude Code plugin that observes how you work with AI, discovers what you truly care about, and applies it automatically — so every session feels like working with someone who *gets you*.
 
-## Why This Matters
+## Principles
 
-Every AI coding session starts from zero. The AI doesn't know if you prefer cautious migrations or clean breaks, minimal code or comprehensive abstractions, brief answers or detailed explanations.
+> **Taste ≠ Skill** — Your AI learns your direction, not your ability.
 
-You can write instructions in CLAUDE.md, but:
-- Most people can't fully articulate their own preferences
-- **Your corrections reveal more than your declarations** — choosing to simplify an AI's verbose proposal says more than writing "I prefer concise code"
+> **Your AI should know you by now.**
 
-your-taste watches these moments and builds a structured preference profile automatically.
+> **Understood, not just analyzed.**
 
-### Taste ≠ Skill
+> **Style, not only standards.** — Taste shapes how the AI works with you, on top of the quality bar.
 
-This is not about making AI mimic you. It's about making AI understand your *direction* while executing at *professional quality*.
+## What You Get
 
-| What we learn | What we DON'T learn |
-|---|---|
-| You prefer cautious approaches | Your specific coding habits |
-| You like minimal abstractions | Your knowledge gaps |
-| You want direct communication | Your skill limitations |
-| You value quality over speed | Your bad patterns |
+**No more cold starts.** `taste init` scans your conversation history and builds your preference profile in seconds. Day-100 experience from day one.
 
-If you prefer caution, the AI gives you **expert-level caution** — migration strategies with rollback plans, not try-catch everywhere. Your taste sets the direction; professional expertise sets the quality bar.
+**Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste translates your preferences into concrete behavioral instructions — deterministic, testable, applied the same way every time.
+
+**Zero effort.** No config files to maintain. No questionnaires. The plugin watches how you respond to AI proposals — your corrections, your choices, your pushbacks — and learns silently. You just work.
+
+**Your data stays yours.** Everything lives locally on your machine. No project code, no business logic, no conversation content is ever stored — just preference scores and distilled taste statements. Wide in, narrow out.
+
+**You'll feel understood.** Most tools show you a score. your-taste distills your thinking into design philosophy — short statements like *"Clean breaks over compatibility debt"* or *"Code should explain itself"* that capture how you think, not just what you do.
 
 ## How It Works
 
 ```
-Session ends → Read transcript → Filter sensitive data → AI extracts preference signals → Update profile
-                                                                                              ↓
-Session starts → Load profile → AI applies your taste at professional quality ← ← ← ← ← ← ←
+Session ends → Read transcript → Filter sensitive data → Extract preference signals → Update profile
+                                                                                          ↓
+Session starts → Load profile → Render behavioral instructions → AI applies your taste ← ←
 ```
 
 1. **SessionEnd hook** reads the conversation transcript
-2. **Privacy filter** strips all business data, credentials, and PII — only behavioral patterns are analyzed
-3. **Claude Haiku** identifies decision moments (AI proposed X → you chose Y) and maps them to 6 personality dimensions
+2. **Privacy filter** strips all credentials and PII locally — no sensitive data leaves your machine
+3. **Claude Haiku** identifies decision moments (AI proposed X → you chose Y), extracts dimension scores and candidate behavioral rules
 4. **Profile** updates with Bayesian scoring — confidence grows with consistent evidence
+5. **Rules accumulate** — when a behavioral pattern appears consistently, you review and approve it. Approved rules are written to `taste.md` — concrete instructions the AI follows every session
 
 ## The 6 Dimensions
 
@@ -51,12 +51,14 @@ Session starts → Load profile → AI applies your taste at professional qualit
 | **Quality vs Speed** | Pragmatic — ship fast, iterate | Perfectionist — quality first |
 | **Exploration** | Focused — stick to the task | Exploratory — improve surroundings |
 
-## Installation
+Scores capture your *direction*, not your *skill*. If you lean minimalist, the AI delivers expert-level simplification — not naive implementations.
+
+## Quick Start
 
 ### Prerequisites
 
 - [Claude Code](https://code.claude.com/) installed
-- `ANTHROPIC_API_KEY` environment variable set (used for Haiku analysis calls)
+- `ANTHROPIC_API_KEY` environment variable set
 
 ### Install
 
@@ -64,42 +66,54 @@ Session starts → Load profile → AI applies your taste at professional qualit
 claude plugin install your-taste
 ```
 
-Or for local development:
+### Build Your Profile Instantly
+
+```bash
+taste init
+```
+
+Scans your past Claude Code sessions and builds your preference profile in seconds. No waiting, no questionnaires — just your real behavioral patterns.
+
+### See Your Profile
+
+```bash
+taste show
+```
+
+### Local Development
 
 ```bash
 git clone https://github.com/SenZhangAI/your-taste.git
 cd your-taste && npm install
-claude --plugin-dir ./your-taste
 ```
 
 ## Privacy
 
 **your-taste never stores your code, business logic, or conversation content.**
 
-What IS stored (`~/.your-taste/profile.yaml`):
-- Dimension scores (e.g., `risk_tolerance: 0.3`)
-- Abstract pattern descriptions (e.g., "Prefers gradual migration patterns")
-- Confidence levels and evidence counts
+What IS stored (`~/.your-taste/`):
+- `profile.yaml` — 6 dimension scores (e.g., `risk_tolerance: 0.78`), confidence levels, evidence counts
+- `taste.md` — Your behavioral rules and design philosophy in plain language (e.g., *"Clean breaks over compatibility debt"*)
 
 What is NOT stored:
 - Code snippets or file contents
 - Business domain details
-- Credentials, API keys, card numbers, PII
-- The conversation transcript itself
+- Credentials, API keys, PII
+- The conversation itself
 
-All sensitive data is stripped **before** the transcript reaches the AI analyzer. The full privacy filter runs locally — no sensitive data leaves your machine.
+All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only abstract scores and behavioral rules come out.
 
 ## Configuration
 
-The profile lives at `~/.your-taste/profile.yaml`. You can edit it manually — the AI will respect your edits. Set `YOUR_TASTE_DIR` environment variable to change the storage location.
+Everything lives in `~/.your-taste/`:
+- `profile.yaml` — dimension scores and confidence (human-readable, editable)
+- `taste.md` — your behavioral rules and design philosophy (human-readable, editable)
 
-## Philosophy
+Set `YOUR_TASTE_DIR` to change the storage location.
 
-> Most people can't fully describe their own preferences. But their behavior is honest.
+## Roadmap
 
-This tool exists because the best way to learn someone's taste is to watch what they do, not ask what they want. Every time you modify an AI suggestion, accept a proposal, or push back on an approach, you're revealing your real preferences — often ones you couldn't articulate yourself.
-
-The goal isn't to make AI agree with you. It's to make AI understand you well enough to be a better collaborator — one that matches your values while exceeding your expectations.
+See [ROADMAP.md](ROADMAP.md) for what's next — from instruction rendering to taste cards to cross-platform support.
 
 ## License
 
