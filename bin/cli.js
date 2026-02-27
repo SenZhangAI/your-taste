@@ -17,7 +17,10 @@ if (command === 'init') {
 async function runInit() {
   console.log('Scanning past sessions...\n');
 
+  const concurrency = process.stdout.isTTY ? 5 : 10;
+
   const result = await backfill(PROJECTS_DIR, {
+    concurrency,
     onProgress({ processed, skipped, total, current }) {
       const pct = Math.round((current / total) * 100);
       const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
