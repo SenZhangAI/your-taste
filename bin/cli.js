@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { backfill } from '../src/backfill.js';
+import { readProfile } from '../src/profile.js';
+import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 
 const PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
 
@@ -7,10 +9,13 @@ const command = process.argv[2];
 
 if (command === 'init') {
   await runInit();
+} else if (command === 'show') {
+  await runShow();
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
   console.log('  init    Scan past sessions and build your preference profile');
+  console.log('  show    Display your taste profile');
   process.exit(1);
 }
 
@@ -49,4 +54,37 @@ async function runInit() {
   }
 
   console.log('\nProfile saved to ~/.your-taste/profile.yaml');
+}
+
+async function runShow() {
+  const profile = await readProfile();
+
+  console.log('Your Taste Profile');
+  console.log('\u2550'.repeat(18) + '\n');
+
+  let hasData = false;
+  for (const [key, dim] of Object.entries(profile.dimensions)) {
+    if (dim.evidence_count === 0) continue;
+    hasData = true;
+
+    const barLen = Math.round(dim.score * 10);
+    const bar = '\u2588'.repeat(barLen) + '\u2591'.repeat(10 - barLen);
+    const label = dim.score < 0.35 ? 'low' : dim.score > 0.65 ? 'high' : 'balanced';
+    const confPct = Math.round(dim.confidence * 100);
+    const name = key.padEnd(20);
+
+    console.log(`${name} ${bar}  ${dim.score.toFixed(2)}  ${label.padEnd(10)} (${dim.evidence_count} obs, confidence: ${confPct}%)`);
+
+    const narrative = getNarrative(key, dim.score);
+    if (narrative && dim.confidence >= 0.3) {
+      console.log(`  ${narrative}`);
+    } else {
+      console.log('  (not enough data yet)');
+    }
+    console.log();
+  }
+
+  if (!hasData) {
+    console.log('No profile data yet. Run `taste init` to scan past sessions.');
+  }
 }
