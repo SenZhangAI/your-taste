@@ -1,7 +1,7 @@
 ---
 name: review
 description: Review and approve accumulated behavioral rules for your taste profile
-allowed-tools: Bash(node *)
+allowed-tools: Bash(node *), AskUserQuestion
 ---
 
 Review pending behavioral rules that your-taste has extracted from your sessions.
