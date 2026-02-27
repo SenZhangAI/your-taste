@@ -1,9 +1,6 @@
 #!/usr/bin/env node
-// Runs when a new Claude Code session starts.
-// Outputs brief status about the taste profile.
-
 import { readProfile } from '../profile.js';
-import { DIMENSIONS } from '../dimensions.js';
+import { renderInstructions } from '../instruction-renderer.js';
 
 async function main() {
   let input = '';
@@ -13,16 +10,26 @@ async function main() {
 
   const profile = await readProfile();
 
-  // Count dimensions with meaningful data
   const activeDims = Object.values(profile.dimensions)
     .filter(d => d.confidence > 0.3);
 
   if (activeDims.length === 0) {
-    process.exit(0); // No profile yet -- silent
+    process.exit(0);
   }
 
-  const result = `your-taste: ${activeDims.length} preference dimensions learned`;
-  console.log(JSON.stringify({ result }));
+  const instructions = renderInstructions(profile);
+
+  const output = {
+    result: `your-taste: ${activeDims.length} preference dimensions active`,
+  };
+
+  if (instructions) {
+    output.hookSpecificOutput = {
+      additionalContext: instructions,
+    };
+  }
+
+  console.log(JSON.stringify(output));
 }
 
 main().catch(() => process.exit(0));
