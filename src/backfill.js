@@ -47,7 +47,8 @@ export async function processSession(transcriptPath) {
   if (conversation.length < 200) return [];
 
   const filtered = filterSensitiveData(conversation);
-  return analyzeTranscript(filtered);
+  const { signals } = await analyzeTranscript(filtered);
+  return signals;
 }
 
 /**

@@ -28,6 +28,19 @@ Score each on 0.0-1.0 scale:
    - Summary (one short sentence describing the preference)
 5. If the conversation has no meaningful decision signals, return empty array
 
+## Behavioral Rules
+
+Beyond dimension scores, extract concrete behavioral rules or design principles the user demonstrates through their decisions.
+
+Rules should be:
+- Short, actionable statements ("X over Y", "Always X", "Never Y")
+- Abstract — no business details, code snippets, or names
+- Genuinely instructive — useful for guiding AI behavior in future sessions
+
+Only extract rules the user strongly or repeatedly demonstrates. Not every preference becomes a rule. Quality over quantity — 0-3 rules per session is typical.
+
+{{PENDING_RULES}}
+
 ## Output Format
 
 Return ONLY valid JSON (no markdown fencing):
@@ -41,6 +54,9 @@ Return ONLY valid JSON (no markdown fencing):
       "evidence": "Preferred gradual migration pattern over immediate replacement",
       "summary": "Prefers gradual changes, avoids aggressive refactoring"
     }
+  ],
+  "candidate_rules": [
+    "Clean breaks over gradual migration"
   ],
   "session_quality": "high|medium|low|none"
 }

@@ -27,7 +27,7 @@ async function main() {
   const filtered = filterSensitiveData(conversation);
 
   // Analyze
-  const signals = await analyzeTranscript(filtered);
+  const { signals } = await analyzeTranscript(filtered);
   if (signals.length === 0) process.exit(0);
 
   // Update profile
