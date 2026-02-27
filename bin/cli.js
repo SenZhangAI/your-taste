@@ -108,7 +108,13 @@ async function runReviewApply() {
     input += chunk;
   }
 
-  const decisions = JSON.parse(input);
+  let decisions;
+  try {
+    decisions = JSON.parse(input);
+  } catch {
+    console.error(JSON.stringify({ error: 'Invalid JSON input' }));
+    process.exit(1);
+  }
   const pending = await readPending();
 
   // Apply accepted rules to taste.md
