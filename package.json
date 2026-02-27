@@ -21,5 +21,8 @@
   },
   "scripts": {
     "test": "vitest run"
+  },
+  "bin": {
+    "taste": "./bin/cli.js"
   }
 }
