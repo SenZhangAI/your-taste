@@ -2,6 +2,8 @@
 import { backfill } from '../src/backfill.js';
 import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
+import { readPending, removePendingRules } from '../src/pending.js';
+import { appendRules } from '../src/taste-file.js';
 
 const PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
 
@@ -11,11 +13,17 @@ if (command === 'init') {
   await runInit();
 } else if (command === 'show') {
   await runShow();
+} else if (command === 'review-data') {
+  await runReviewData();
+} else if (command === 'review-apply') {
+  await runReviewApply();
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
-  console.log('  init    Scan past sessions and build your preference profile');
-  console.log('  show    Display your taste profile');
+  console.log('  init          Scan past sessions and build your preference profile');
+  console.log('  show          Display your taste profile');
+  console.log('  review-data   Output pending rules as JSON (for skills)');
+  console.log('  review-apply  Apply review decisions from stdin JSON (for skills)');
   process.exit(1);
 }
 
@@ -87,4 +95,41 @@ async function runShow() {
   if (!hasData) {
     console.log('No profile data yet. Run `taste init` to scan past sessions.');
   }
+}
+
+async function runReviewData() {
+  const pending = await readPending();
+  console.log(JSON.stringify(pending, null, 2));
+}
+
+async function runReviewApply() {
+  let input = '';
+  for await (const chunk of process.stdin) {
+    input += chunk;
+  }
+
+  const decisions = JSON.parse(input);
+  const pending = await readPending();
+
+  // Apply accepted rules to taste.md
+  const accepted = decisions.accepted || [];
+  const edited = (decisions.edited || []).map(e => e.revised);
+  const allApproved = [...accepted, ...edited];
+
+  if (allApproved.length > 0) {
+    await appendRules(allApproved);
+  }
+
+  // Remove accepted, edited originals, and dismissed from pending
+  const toRemove = [
+    ...accepted,
+    ...(decisions.edited || []).map(e => e.original),
+    ...(decisions.dismissed || []),
+  ];
+
+  if (toRemove.length > 0) {
+    await removePendingRules(pending, toRemove);
+  }
+
+  console.log(JSON.stringify({ applied: allApproved.length, dismissed: (decisions.dismissed || []).length }));
 }
