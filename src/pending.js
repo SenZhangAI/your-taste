@@ -1,0 +1,51 @@
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { parse, stringify } from 'yaml';
+
+function getDir() {
+  return process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+}
+
+function getPendingPath() {
+  return `${getDir()}/pending.yaml`;
+}
+
+export async function readPending() {
+  try {
+    const content = await readFile(getPendingPath(), 'utf8');
+    return parse(content) || { rules: [] };
+  } catch {
+    return { rules: [] };
+  }
+}
+
+export async function updatePending(pending, newRuleTexts) {
+  const today = new Date().toISOString().split('T')[0];
+
+  for (const text of newRuleTexts) {
+    const existing = pending.rules.find(r => r.text === text);
+    if (existing) {
+      existing.count++;
+      existing.last_seen = today;
+    } else {
+      pending.rules.push({ text, count: 1, first_seen: today, last_seen: today });
+    }
+  }
+
+  const dir = getDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(getPendingPath(), stringify(pending), 'utf8');
+  return pending;
+}
+
+export async function removePendingRules(pending, textsToRemove) {
+  pending.rules = pending.rules.filter(r => !textsToRemove.includes(r.text));
+
+  const dir = getDir();
+  await mkdir(dir, { recursive: true });
+  await writeFile(getPendingPath(), stringify(pending), 'utf8');
+  return pending;
+}
+
+export function getPendingRuleTexts(pending) {
+  return pending.rules.map(r => r.text);
+}
