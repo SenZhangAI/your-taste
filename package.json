@@ -1,6 +1,6 @@
 {
   "name": "your-taste",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI learns your decision-making style, not your skill level. A Claude Code plugin for cross-session preference learning.",
   "type": "module",
   "license": "MIT",
