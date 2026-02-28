@@ -57,16 +57,23 @@ We learn from what you *do*, not what you *say*. Your corrections, your choices,
 ## How It Works
 
 ```
-Session ends → Read transcript → Filter sensitive data → Extract signals → Update profile
-                                                                                    ↓
-Session starts → Load profile → Render behavioral instructions → AI applies your taste
+Session ends → Read transcript → Filter PII → Extract signals → Update profile + context
+                                                                          ↓
+Every message → Inject thinking framework + project goal + recent context
+                                                                          ↓
+Session starts → Load taste.md + goal.md + context.md → AI starts informed
 ```
 
-1. **SessionEnd hook** reads the conversation transcript
-2. **Privacy filter** strips all credentials and PII locally — no sensitive data leaves your machine
-3. **Claude Haiku** identifies decision moments (AI proposed X → you chose Y), extracts dimension scores and candidate behavioral rules
-4. **Profile** updates with Bayesian scoring — confidence grows with consistent evidence
-5. **Rules accumulate** — when a behavioral pattern appears consistently, you review and approve it. Approved rules are written to `taste.md` — concrete instructions the AI follows every session
+**Learning (SessionEnd)**
+1. Privacy filter strips all credentials and PII locally
+2. Claude Haiku extracts dimension scores, candidate behavioral rules, and strategic context (decisions, open questions, topics)
+3. Profile updates with Bayesian scoring; rules accumulate in `pending.yaml`
+4. Project `context.md` and `global-context.md` update automatically
+
+**Applying (SessionStart + every message)**
+5. SessionStart injects your `taste.md` rules + project `goal.md` + recent context
+6. UserPromptSubmit hook injects a thinking framework on every message — guiding AI to infer your *intent* (A), not just your *instruction* (C)
+7. Priority-based injection ensures the most important context always fits within budget
 
 ## The 6 Dimensions
 
@@ -118,8 +125,11 @@ cd your-taste && npm install
 **your-taste never stores your code, business logic, or conversation content.**
 
 What IS stored (`~/.your-taste/`):
-- `profile.yaml` — 6 dimension scores (e.g., `risk_tolerance: 0.78`), confidence levels, evidence counts
-- `taste.md` — Your behavioral rules and design philosophy in plain language (e.g., *"Clean breaks over compatibility debt"*)
+- `profile.yaml` — 6 dimension scores, confidence levels, evidence counts
+- `taste.md` — Your behavioral rules and design philosophy in plain language
+- `global-context.md` — Cross-project focus topics (what you're working on across projects)
+- `projects/<name>/goal.md` — Project vision and constraints (user-authored)
+- `projects/<name>/context.md` — Recent tactical decisions and open questions (auto-maintained)
 
 What is NOT stored:
 - Code snippets or file contents
@@ -127,13 +137,17 @@ What is NOT stored:
 - Credentials, API keys, PII
 - The conversation itself
 
-All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only abstract scores and behavioral rules come out.
+All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only abstract scores, behavioral rules, and strategic-level context come out.
 
 ## Configuration
 
 Everything lives in `~/.your-taste/`:
-- `profile.yaml` — dimension scores and confidence (human-readable, editable)
+- `profile.yaml` — dimension scores and confidence (machine-internal, human-readable)
 - `taste.md` — your behavioral rules and design philosophy (human-readable, editable)
+- `pending.yaml` — candidate rules awaiting review (machine-internal)
+- `global-context.md` — cross-project focus tracking (human-readable, editable)
+- `projects/<name>/goal.md` — project vision and constraints (human-authored)
+- `projects/<name>/context.md` — recent decisions, open questions, last session (auto-maintained)
 
 Set `YOUR_TASTE_DIR` to change the storage location.
 

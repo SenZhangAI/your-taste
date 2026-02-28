@@ -1,11 +1,11 @@
 {
   "name": "taste",
-  "version": "0.3.0",
-  "description": "AI learns your decision-making style. Taste direction, not skill mimicry.",
+  "version": "0.4.0",
+  "description": "Context accelerator for AI collaboration. Learns your thinking patterns, tracks project context, and injects strategic awareness into every session.",
   "author": {
     "name": "SenZhangAI"
   },
   "repository": "https://github.com/SenZhangAI/your-taste",
   "license": "MIT",
-  "keywords": ["personalization", "preferences", "taste", "style"]
+  "keywords": ["context", "collaboration", "taste", "preferences", "personalization"]
 }
