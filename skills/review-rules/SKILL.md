@@ -6,6 +6,8 @@ allowed-tools: Bash(node *), AskUserQuestion
 
 Review pending behavioral rules that your-taste has extracted from your sessions.
 
+**Important:** Always respond in the user's language (infer from their recent messages in this conversation).
+
 ## Steps
 
 1. Get pending rules data:
