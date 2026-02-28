@@ -32,8 +32,6 @@ export function parseAnalysisResponse(text) {
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const result = JSON.parse(cleaned);
 
-    if (result.session_quality === 'none') return { signals: [], rules: [], context: null };
-
     const signals = (result.signals || []).filter(
       s => DIMENSIONS[s.dimension] && typeof s.score === 'number',
     );
