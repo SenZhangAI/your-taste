@@ -55,9 +55,17 @@ async function main() {
 
   const additionalContext = buildAdditionalContext(profile, tasteContent, goalContent, projectContextText);
 
-  const source = hasTaste ? 'taste.md' : 'templates';
+  const parts = [];
+  if (hasTaste) {
+    parts.push('taste.md loaded');
+  } else if (activeDims.length > 0) {
+    parts.push(`${activeDims.length} dimensions`);
+  }
+  if (hasGoal) parts.push('goal');
+  if (hasProjectCtx) parts.push('project context');
+
   const output = {
-    result: `your-taste: ${activeDims.length} dimensions, source: ${source}`,
+    result: `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'no data yet'}`,
   };
 
   if (additionalContext) {

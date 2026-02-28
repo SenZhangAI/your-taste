@@ -27,11 +27,12 @@ describe('analyzer response parsing', () => {
     expect(result.rules).toEqual([]);
   });
 
-  it('returns empty for session_quality none', () => {
+  it('returns empty signals and rules for session_quality none', () => {
     const json = JSON.stringify({ signals: [], candidate_rules: [], session_quality: 'none' });
     const result = parseAnalysisResponse(json);
     expect(result.signals).toEqual([]);
     expect(result.rules).toEqual([]);
+    expect(result.context).toBeNull();
   });
 
   it('handles malformed JSON gracefully', () => {
@@ -93,8 +94,66 @@ describe('analyzer response parsing', () => {
     expect(result.context).toBeNull();
   });
 
-  it('returns null context on session_quality none', () => {
-    const json = JSON.stringify({ signals: [], candidate_rules: [], session_quality: 'none' });
+  it('preserves context even when session_quality is none', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'none',
+      session_context: {
+        topics: ['debugging API integration'],
+        decisions: ['use retry with exponential backoff'],
+        open_questions: [],
+      },
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.signals).toEqual([]);
+    expect(result.rules).toEqual([]);
+    expect(result.context).toEqual({
+      topics: ['debugging API integration'],
+      decisions: ['use retry with exponential backoff'],
+      open_questions: [],
+    });
+  });
+
+  it('validates context structure — filters non-string array items', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'medium',
+      session_context: {
+        topics: ['valid topic', 123, null, ''],
+        decisions: ['valid decision', false],
+        open_questions: ['valid question'],
+      },
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.context.topics).toEqual(['valid topic']);
+    expect(result.context.decisions).toEqual(['valid decision']);
+    expect(result.context.open_questions).toEqual(['valid question']);
+  });
+
+  it('returns null context when session_context has no valid entries', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'medium',
+      session_context: {
+        topics: [],
+        decisions: [],
+        open_questions: [],
+      },
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.context).toBeNull();
+  });
+
+  it('handles non-object session_context gracefully', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'medium',
+      session_context: 'not an object',
+    });
     const result = parseAnalysisResponse(json);
     expect(result.context).toBeNull();
   });

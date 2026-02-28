@@ -4,7 +4,7 @@ import { DIMENSIONS } from './dimensions.js';
 
 export async function analyzeTranscript(conversationText, pendingRuleTexts = []) {
   const promptTemplate = await readFile(
-    new URL('../prompts/extract-preferences.md', import.meta.url),
+    new URL('../prompts/analyze-session.md', import.meta.url),
     'utf8',
   );
 
@@ -27,12 +27,25 @@ export async function analyzeTranscript(conversationText, pendingRuleTexts = [])
   return parseAnalysisResponse(response);
 }
 
+function validateContext(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+
+  const filterStrings = arr =>
+    (Array.isArray(arr) ? arr : []).filter(s => typeof s === 'string' && s.trim().length > 0);
+
+  const topics = filterStrings(raw.topics);
+  const decisions = filterStrings(raw.decisions);
+  const open_questions = filterStrings(raw.open_questions);
+
+  if (topics.length === 0 && decisions.length === 0 && open_questions.length === 0) return null;
+
+  return { topics, decisions, open_questions };
+}
+
 export function parseAnalysisResponse(text) {
   try {
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const result = JSON.parse(cleaned);
-
-    if (result.session_quality === 'none') return { signals: [], rules: [], context: null };
 
     const signals = (result.signals || []).filter(
       s => DIMENSIONS[s.dimension] && typeof s.score === 'number',
@@ -42,7 +55,7 @@ export function parseAnalysisResponse(text) {
       r => typeof r === 'string' && r.trim().length > 0,
     );
 
-    const context = result.session_context || null;
+    const context = validateContext(result.session_context);
 
     return { signals, rules, context };
   } catch {

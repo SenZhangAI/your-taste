@@ -8,7 +8,7 @@ import { ensureProjectDir } from '../project.js';
 const MAX_CHARS = 4000;
 
 export async function buildUserPromptContext(projectDir) {
-  // P2: Thinking framework (always included)
+  // P1: Thinking framework (always included)
   let framework = '';
   try {
     framework = await readFile(
@@ -19,7 +19,7 @@ export async function buildUserPromptContext(projectDir) {
     // Template missing — degrade gracefully
   }
 
-  // P1: Project goal
+  // P2: Project goal
   let goalText = null;
   try {
     const goalContent = await loadGoal(projectDir);
@@ -40,11 +40,15 @@ export async function buildUserPromptContext(projectDir) {
     globalCtxText = renderGlobalContext(globalCtx);
   } catch { /* no global context */ }
 
-  // Priority-based assembly: P2 > P1 > P3 > P4
-  // P0 (taste.md) is injected by session-start, not here
+  // Priority-based assembly (lower number = higher priority):
+  // P0: taste.md (injected by session-start, not here)
+  // P1: thinking framework — core reasoning enhancement
+  // P2: project goal — stable strategic context
+  // P3: project context — recent tactical decisions
+  // P4: global context — cross-project awareness
   const prioritized = [
-    { text: framework, priority: 'P2', required: true },
-    { text: goalText, priority: 'P1', required: true },
+    { text: framework, priority: 'P1', required: true },
+    { text: goalText, priority: 'P2', required: true },
     { text: projectCtxText, priority: 'P3', required: false },
     { text: globalCtxText, priority: 'P4', required: false },
   ].filter(s => s.text);
