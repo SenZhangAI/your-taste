@@ -2,25 +2,25 @@
 import { readProfile } from '../profile.js';
 import { renderInstructions } from '../instruction-renderer.js';
 import { readTasteFile } from '../taste-file.js';
-import { loadContext, renderContext } from '../context.js';
+import { ensureProjectDir } from '../project.js';
+import { loadGoal, renderGoalForInjection } from '../goal.js';
+import { loadProjectContext, renderProjectContext } from '../context.js';
 
 const QUALITY_FLOOR = 'Apply these preferences on top of professional best practices. Never compromise error handling at system boundaries, security best practices, or data integrity.';
 
-export function buildAdditionalContext(profile, tasteContent, context) {
+export function buildAdditionalContext(profile, tasteContent, goalContent, projectContextText) {
   let base;
-  // taste.md takes priority when it has content
   if (tasteContent) {
     base = `${tasteContent}\n\n${QUALITY_FLOOR}`;
   } else {
     base = renderInstructions(profile);
   }
 
-  const contextText = context ? renderContext(context) : null;
+  const goalText = renderGoalForInjection(goalContent);
 
-  if (!base && !contextText) return null;
-  if (!base) return contextText;
-  if (!contextText) return base;
-  return `${base}\n\n${contextText}`;
+  const sections = [base, goalText, projectContextText].filter(Boolean);
+  if (sections.length === 0) return null;
+  return sections.join('\n\n');
 }
 
 async function main() {
@@ -30,20 +30,30 @@ async function main() {
   }
 
   const profile = await readProfile();
-
-  const activeDims = Object.values(profile.dimensions)
-    .filter(d => d.confidence > 0.3);
-
+  const activeDims = Object.values(profile.dimensions).filter(d => d.confidence > 0.3);
   const tasteContent = await readTasteFile();
   const hasTaste = !!tasteContent;
-  const context = await loadContext();
-  const hasContext = context.focus.length > 0 || context.decisions.length > 0 || context.open_questions.length > 0;
 
-  if (activeDims.length === 0 && !hasTaste && !hasContext) {
+  // Load project-scoped data
+  let goalContent = null;
+  let projectContextText = null;
+  try {
+    const projectDir = await ensureProjectDir(process.cwd());
+    goalContent = await loadGoal(projectDir);
+    const projectCtx = await loadProjectContext(projectDir);
+    projectContextText = renderProjectContext(projectCtx);
+  } catch {
+    // No project data yet — that's fine
+  }
+
+  const hasGoal = !!goalContent;
+  const hasProjectCtx = !!projectContextText;
+
+  if (activeDims.length === 0 && !hasTaste && !hasGoal && !hasProjectCtx) {
     process.exit(0);
   }
 
-  const additionalContext = buildAdditionalContext(profile, tasteContent, context);
+  const additionalContext = buildAdditionalContext(profile, tasteContent, goalContent, projectContextText);
 
   const source = hasTaste ? 'taste.md' : 'templates';
   const output = {
@@ -51,9 +61,7 @@ async function main() {
   };
 
   if (additionalContext) {
-    output.hookSpecificOutput = {
-      additionalContext,
-    };
+    output.hookSpecificOutput = { additionalContext };
   }
 
   console.log(JSON.stringify(output));
