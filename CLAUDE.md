@@ -1,13 +1,29 @@
 # Your Taste
 
-Read the user's taste profile at `~/.your-taste/profile.yaml` at the start of each session. This file contains auto-learned decision-making preferences extracted from past conversations.
+## Core Purpose
 
-## How to Apply
+Your-taste is a **context accelerator**, not just a preference tracker. The goal is not "understand the user" as an end — it's to **reduce the information gap between user and AI**, enabling faster autonomous collaboration.
 
-The profile captures the user's DIRECTION (taste), not their skill level. Two rules:
+Understanding taste is one means. The full picture includes:
+- **Direction preferences** (cautious vs bold, minimal vs comprehensive)
+- **Decision principles** (concrete rules extracted from repeated behavior)
+- **Strategic context** (what the user is focused on, what was already decided)
+- **Thinking patterns** (how users reason, so AI can predict intent)
 
-1. **Match their direction** — if they prefer cautious approaches, favor gradual migrations, rollback plans, proven patterns. If they prefer minimal code, avoid over-abstraction.
+## How to Apply Profiles
 
-2. **Exceed their skill level** — always execute at professional best-practice quality. A "cautious" user gets expert-level caution (migration strategies, canary deploys), not amateur caution (try-catch everywhere). A "minimalist" user gets elegant simplicity, not lazy shortcuts.
+The profile captures DIRECTION (taste), not skill level. Two rules:
 
-The profile has 6 dimensions. Only act on dimensions with confidence > 30%. For low-confidence dimensions, use your professional judgment.
+1. **Match their direction** — if they prefer cautious approaches, favor gradual migrations. If they prefer minimal code, avoid over-abstraction.
+
+2. **Exceed their skill level** — always execute at professional best-practice quality. A "cautious" user gets expert-level caution (migration strategies, canary deploys), not amateur caution (try-catch everywhere).
+
+Only act on dimensions with confidence > 30%. For low-confidence dimensions, use professional judgment.
+
+## Critical Design Constraint: Infer A, Not C
+
+Users think A → B → C then say C. When extracting preferences from behavior:
+- **Extract the underlying principle (A)**, not the surface action (C)
+- Example: user gives specific numeric counterexample → A is "systematic thinker who traces full paths", NOT "prefers concrete over abstract"
+- Behavioral signals reveal direction but can mislead about motivation
+- The extract-preferences prompt must always ask WHY, not just WHAT
