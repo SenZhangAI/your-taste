@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { stringify } from 'yaml';
 import { buildUserPromptContext } from '../src/hooks/user-prompt.js';
+import { ensureProjectDir } from '../src/project.js';
 
-describe('user-prompt hook context assembly', () => {
+describe('user-prompt hook priority-based injection', () => {
   let dir;
 
   beforeEach(async () => {
@@ -18,52 +18,49 @@ describe('user-prompt hook context assembly', () => {
     await rm(dir, { recursive: true });
   });
 
-  it('returns framework + context when both available', async () => {
-    await writeFile(
-      join(dir, 'context.yaml'),
-      stringify({
-        version: 1,
-        focus: [{ date: '2026-02-28', text: 'testing feature' }],
-        decisions: [],
-        open_questions: [],
-      }),
-      'utf8',
-    );
-    const result = await buildUserPromptContext();
+  it('returns framework when no other data exists', async () => {
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+    const result = await buildUserPromptContext(projectDir);
     expect(result).toContain('Intent Inference');
-    expect(result).toContain('testing feature');
   });
 
-  it('returns framework only when no context file', async () => {
-    const result = await buildUserPromptContext();
+  it('includes goal content when available', async () => {
+    const projectDir = await ensureProjectDir('/test/project');
+    await writeFile(join(projectDir, 'goal.md'), '# Project Goal\n\n## What\nTest plugin', 'utf8');
+
+    const result = await buildUserPromptContext(projectDir);
     expect(result).toContain('Intent Inference');
-    expect(result).not.toContain('Active Context');
+    expect(result).toContain('Test plugin');
   });
 
-  it('returns null when framework template is missing and no context', async () => {
-    // This test validates graceful degradation. In practice the template
-    // always exists, but if deleted the hook should not crash.
-    // We test this by monkeypatching — but since buildUserPromptContext
-    // reads from a known path relative to the module, we just verify
-    // the function returns something (framework file is always present).
-    const result = await buildUserPromptContext();
-    expect(result).toBeTruthy();
+  it('includes project context when available', async () => {
+    const projectDir = await ensureProjectDir('/test/project2');
+    await writeFile(join(projectDir, 'context.md'), '# Project Context\n\n## Recent Decisions\n- [2026-02-28] test decision\n', 'utf8');
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Intent Inference');
+    expect(result).toContain('test decision');
   });
 
-  it('truncates to framework only when combined output exceeds max', async () => {
-    // Create a context.yaml with many long entries to exceed 4000 chars
-    const longEntries = Array.from({ length: 15 }, (_, i) => ({
-      date: '2026-02-28',
-      text: `Very long decision text that takes up significant space in the output ${i} ${'x'.repeat(200)}`,
-    }));
-    await writeFile(
-      join(dir, 'context.yaml'),
-      stringify({ version: 1, focus: [], decisions: longEntries, open_questions: [] }),
-      'utf8',
-    );
-    const result = await buildUserPromptContext();
-    // Should still have framework but context may be dropped
+  it('includes global context when available', async () => {
+    await writeFile(join(dir, 'global-context.md'), '# Cross-Project Focus\n\n- [2026-02-28] cross-project topic\n', 'utf8');
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('cross-project topic');
+  });
+
+  it('drops lower-priority content when exceeding max chars', async () => {
+    const projectDir = await ensureProjectDir('/test/project3');
+    const largeGoal = '# Goal\n\n' + 'x'.repeat(3000);
+    await writeFile(join(projectDir, 'goal.md'), largeGoal, 'utf8');
+    const largeContext = '# Context\n\n## Recent Decisions\n' + Array.from({ length: 20 }, (_, i) => `- [2026-02-28] ${'y'.repeat(200)} ${i}`).join('\n');
+    await writeFile(join(projectDir, 'context.md'), largeContext, 'utf8');
+
+    const result = await buildUserPromptContext(projectDir);
     expect(result).toContain('Intent Inference');
-    expect(result.length).toBeLessThanOrEqual(4100); // some slack for framework
+    expect(result.length).toBeLessThanOrEqual(5000);
   });
 });
