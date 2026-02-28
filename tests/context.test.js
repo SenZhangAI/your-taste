@@ -1,130 +1,158 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, writeFile } from 'fs/promises';
+import { mkdtemp, rm, readFile, writeFile, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { stringify } from 'yaml';
 import {
-  loadContext,
-  updateContext,
-  pruneContext,
-  renderContext,
+  loadProjectContext,
+  updateProjectContext,
+  renderProjectContext,
 } from '../src/context.js';
 
-describe('context storage', () => {
-  let dir;
+describe('project context storage (Markdown)', () => {
+  let projectDir;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
-    process.env.YOUR_TASTE_DIR = dir;
+    projectDir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
   });
 
   afterEach(async () => {
-    delete process.env.YOUR_TASTE_DIR;
-    await rm(dir, { recursive: true });
+    await rm(projectDir, { recursive: true });
   });
 
   it('returns empty context when file missing', async () => {
-    const ctx = await loadContext();
-    expect(ctx.focus).toEqual([]);
+    const ctx = await loadProjectContext(projectDir);
     expect(ctx.decisions).toEqual([]);
     expect(ctx.open_questions).toEqual([]);
+    expect(ctx.last_session).toBeNull();
   });
 
-  it('writes and reads context entries', async () => {
-    await updateContext({
-      topics: ['product repositioning'],
-      decisions: ['use YAML for storage'],
+  it('writes and reads context as Markdown', async () => {
+    await updateProjectContext(projectDir, {
+      decisions: ['use Markdown for storage'],
       open_questions: ['size limits'],
+      summary: 'Implemented context refactor',
     });
-    const ctx = await loadContext();
-    expect(ctx.focus).toHaveLength(1);
-    expect(ctx.focus[0].text).toBe('product repositioning');
+    const ctx = await loadProjectContext(projectDir);
     expect(ctx.decisions).toHaveLength(1);
+    expect(ctx.decisions[0].text).toBe('use Markdown for storage');
     expect(ctx.open_questions).toHaveLength(1);
+    expect(ctx.open_questions[0].text).toBe('size limits');
+    expect(ctx.last_session).toContain('Implemented context refactor');
   });
 
-  it('deduplicates by exact text match', async () => {
-    await updateContext({ topics: ['topic A'], decisions: [], open_questions: [] });
-    await updateContext({ topics: ['topic A', 'topic B'], decisions: [], open_questions: [] });
-    const ctx = await loadContext();
-    expect(ctx.focus).toHaveLength(2);
-    expect(ctx.focus.map(f => f.text)).toContain('topic A');
-    expect(ctx.focus.map(f => f.text)).toContain('topic B');
+  it('produces valid Markdown file', async () => {
+    await updateProjectContext(projectDir, {
+      decisions: ['decision one'],
+      open_questions: ['question one'],
+      summary: 'Did stuff',
+    });
+    const raw = await readFile(join(projectDir, 'context.md'), 'utf8');
+    expect(raw).toContain('# Project Context');
+    expect(raw).toContain('## Recent Decisions');
+    expect(raw).toContain('- [');
+    expect(raw).toContain('decision one');
+    expect(raw).toContain('## Open Questions');
+    expect(raw).toContain('question one');
+    expect(raw).toContain('## Last Session');
+    expect(raw).toContain('Did stuff');
   });
 
-  it('respects max entry limits', async () => {
-    // focus max is 10
+  it('deduplicates decisions by text', async () => {
+    await updateProjectContext(projectDir, { decisions: ['same decision'], open_questions: [], summary: null });
+    await updateProjectContext(projectDir, { decisions: ['same decision', 'new one'], open_questions: [], summary: null });
+    const ctx = await loadProjectContext(projectDir);
+    expect(ctx.decisions).toHaveLength(2);
+    const texts = ctx.decisions.map(d => d.text);
+    expect(texts.filter(t => t === 'same decision')).toHaveLength(1);
+  });
+
+  it('enforces FIFO limit of 10 decisions', async () => {
     for (let i = 0; i < 12; i++) {
-      await updateContext({ topics: [`topic ${i}`], decisions: [], open_questions: [] });
+      await updateProjectContext(projectDir, { decisions: [`decision ${i}`], open_questions: [], summary: null });
     }
-    const ctx = await loadContext();
-    expect(ctx.focus.length).toBeLessThanOrEqual(10);
-    // newest entries kept (topic 11, 10, 9...)
-    expect(ctx.focus[0].text).toBe('topic 11');
+    const ctx = await loadProjectContext(projectDir);
+    expect(ctx.decisions).toHaveLength(10);
+    // newest first
+    expect(ctx.decisions[0].text).toBe('decision 11');
   });
 
-  it('prunes expired entries', async () => {
-    await updateContext({ topics: ['old topic'], decisions: ['old decision'], open_questions: [] });
-    // Manually backdate the entries
-    const ctx = await loadContext();
-    const oldDate = new Date();
-    oldDate.setDate(oldDate.getDate() - 31); // 31 days ago — past 30-day focus TTL
-    ctx.focus[0].date = oldDate.toISOString().split('T')[0];
-    const oldDecDate = new Date();
-    oldDecDate.setDate(oldDecDate.getDate() - 91); // past 90-day decision TTL
-    ctx.decisions[0].date = oldDecDate.toISOString().split('T')[0];
+  it('enforces limit of 5 open questions', async () => {
+    for (let i = 0; i < 7; i++) {
+      await updateProjectContext(projectDir, { decisions: [], open_questions: [`question ${i}`], summary: null });
+    }
+    const ctx = await loadProjectContext(projectDir);
+    expect(ctx.open_questions).toHaveLength(5);
+    expect(ctx.open_questions[0].text).toBe('question 6');
+  });
 
-    // Write backdated context, then prune
-    await writeFile(join(dir, 'context.yaml'), stringify({ version: 1, ...ctx }), 'utf8');
+  it('last_session is overwritten each time', async () => {
+    await updateProjectContext(projectDir, { decisions: [], open_questions: [], summary: 'first session' });
+    await updateProjectContext(projectDir, { decisions: [], open_questions: [], summary: 'second session' });
+    const ctx = await loadProjectContext(projectDir);
+    expect(ctx.last_session).toContain('second session');
+    expect(ctx.last_session).not.toContain('first session');
+  });
 
-    await pruneContext();
-    const pruned = await loadContext();
-    expect(pruned.focus).toHaveLength(0);
-    expect(pruned.decisions).toHaveLength(0);
+  it('parses back a manually edited context.md', async () => {
+    // Simulate user editing the file directly
+    const manualContent = `# Project Context
+
+## Recent Decisions
+- [2026-02-28] user added this manually
+- [2026-02-27] older decision
+
+## Open Questions
+- is this working?
+
+## Last Session
+*2026-02-28* — Manual session note
+`;
+    await writeFile(join(projectDir, 'context.md'), manualContent, 'utf8');
+    const ctx = await loadProjectContext(projectDir);
+    expect(ctx.decisions).toHaveLength(2);
+    expect(ctx.decisions[0].text).toBe('user added this manually');
+    expect(ctx.open_questions).toHaveLength(1);
+    expect(ctx.last_session).toContain('Manual session note');
   });
 });
 
-describe('context rendering', () => {
-  let dir;
+describe('project context rendering', () => {
+  let projectDir;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
-    process.env.YOUR_TASTE_DIR = dir;
+    projectDir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
   });
 
   afterEach(async () => {
-    delete process.env.YOUR_TASTE_DIR;
-    await rm(dir, { recursive: true });
+    await rm(projectDir, { recursive: true });
   });
 
   it('returns null when context is empty', async () => {
-    const result = renderContext(await loadContext());
-    expect(result).toBeNull();
+    const ctx = await loadProjectContext(projectDir);
+    expect(renderProjectContext(ctx)).toBeNull();
   });
 
-  it('renders focus with short dates, decisions without dates', async () => {
-    await updateContext({
-      topics: ['context accelerator design'],
-      decisions: ['use YAML storage'],
-      open_questions: ['size limits'],
+  it('renders decisions and questions for injection', async () => {
+    await updateProjectContext(projectDir, {
+      decisions: ['use Markdown'],
+      open_questions: ['size limit?'],
+      summary: 'Did work',
     });
-    const ctx = await loadContext();
-    const rendered = renderContext(ctx);
-    expect(rendered).toContain('## Active Context');
-    expect(rendered).toContain('### Recent Focus');
-    expect(rendered).toContain('context accelerator design');
-    expect(rendered).toContain('### Key Decisions');
-    expect(rendered).toContain('use YAML storage');
-    expect(rendered).toContain('### Open Questions');
-    expect(rendered).toContain('size limits');
+    const ctx = await loadProjectContext(projectDir);
+    const rendered = renderProjectContext(ctx);
+    expect(rendered).toContain('Recent Decisions');
+    expect(rendered).toContain('use Markdown');
+    expect(rendered).toContain('Open Questions');
+    expect(rendered).toContain('size limit?');
+    expect(rendered).toContain('Last Session');
   });
 
   it('omits empty sections', async () => {
-    await updateContext({ topics: ['only focus'], decisions: [], open_questions: [] });
-    const ctx = await loadContext();
-    const rendered = renderContext(ctx);
-    expect(rendered).toContain('### Recent Focus');
-    expect(rendered).not.toContain('### Key Decisions');
-    expect(rendered).not.toContain('### Open Questions');
+    await updateProjectContext(projectDir, { decisions: ['only decisions'], open_questions: [], summary: null });
+    const ctx = await loadProjectContext(projectDir);
+    const rendered = renderProjectContext(ctx);
+    expect(rendered).toContain('Recent Decisions');
+    expect(rendered).not.toContain('Open Questions');
+    expect(rendered).not.toContain('Last Session');
   });
 });
