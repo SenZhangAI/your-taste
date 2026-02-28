@@ -1,5 +1,5 @@
 ---
-name: init
+name: scan-sessions
 description: Scan past Claude Code sessions and build your taste profile instantly
 context: fork
 allowed-tools: Bash(node *)
