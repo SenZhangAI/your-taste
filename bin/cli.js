@@ -3,7 +3,11 @@ import { backfill } from '../src/backfill.js';
 import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 import { readPending, removePendingRules } from '../src/pending.js';
-import { appendRules } from '../src/taste-file.js';
+import { readTasteFile, appendRules } from '../src/taste-file.js';
+import { loadGoal } from '../src/goal.js';
+import { loadProjectContext } from '../src/context.js';
+import { loadGlobalContext } from '../src/global-context.js';
+import { ensureProjectDir } from '../src/project.js';
 
 const PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
 
@@ -17,6 +21,8 @@ if (command === 'init') {
   await runReviewData();
 } else if (command === 'review-apply') {
   await runReviewApply();
+} else if (command === 'status') {
+  await runStatus();
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
@@ -25,6 +31,7 @@ if (command === 'init') {
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
   console.log('  show              Display your taste profile');
+  console.log('  status            Show what your-taste knows about you and this project');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
   process.exit(1);
@@ -181,4 +188,60 @@ async function runReviewApply() {
   }
 
   console.log(JSON.stringify({ applied: allApproved.length, dismissed: (decisions.dismissed || []).length }));
+}
+
+async function runStatus() {
+  const profile = await readProfile();
+  const activeDims = Object.values(profile.dimensions).filter(d => d.confidence > 0.3);
+  const tasteContent = await readTasteFile();
+
+  console.log('your-taste status');
+  console.log('═'.repeat(18) + '\n');
+
+  // Profile
+  const dimCount = activeDims.length;
+  const ruleCount = tasteContent ? tasteContent.split('\n').filter(l => l.startsWith('- ')).length : 0;
+  console.log(`Profile:     ${dimCount} dimensions active, ${ruleCount} behavioral rules`);
+
+  // Pending rules
+  const pending = await readPending();
+  const pendingCount = pending.rules ? pending.rules.length : 0;
+  if (pendingCount > 0) {
+    console.log(`Pending:     ${pendingCount} rules awaiting review (run: taste review)`);
+  }
+
+  // Project context
+  let projectDir;
+  try {
+    projectDir = await ensureProjectDir(process.cwd());
+  } catch {
+    projectDir = null;
+  }
+
+  if (projectDir) {
+    const goal = await loadGoal(projectDir);
+    const ctx = await loadProjectContext(projectDir);
+    const hasGoal = !!goal;
+    const decisionCount = ctx.decisions.length;
+    const questionCount = ctx.open_questions.length;
+
+    console.log(`Goal:        ${hasGoal ? 'set' : 'not set'}`);
+    console.log(`Context:     ${decisionCount} decisions, ${questionCount} open questions`);
+    if (ctx.last_session) {
+      console.log(`Last session: ${ctx.last_session}`);
+    }
+  } else {
+    console.log('Project:     (not in a tracked project)');
+  }
+
+  // Global context
+  try {
+    const globalCtx = await loadGlobalContext();
+    const focusCount = globalCtx.focus ? globalCtx.focus.length : 0;
+    console.log(`Global:      ${focusCount} cross-project focus areas`);
+  } catch {
+    console.log('Global:      (no global context)');
+  }
+
+  console.log('');
 }
