@@ -1,98 +1,141 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { parse, stringify } from 'yaml';
+import { join } from 'path';
 
-const MAX_FOCUS = 10;
-const MAX_DECISIONS = 15;
+const MAX_DECISIONS = 10;
 const MAX_QUESTIONS = 5;
-const FOCUS_TTL_DAYS = 30;
-const DECISIONS_TTL_DAYS = 90;
-const QUESTIONS_TTL_DAYS = 60;
-
-function getDir() {
-  return process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
-}
-
-function getContextPath() {
-  return `${getDir()}/context.yaml`;
-}
 
 function createEmptyContext() {
-  return { focus: [], decisions: [], open_questions: [] };
+  return { decisions: [], open_questions: [], last_session: null };
 }
 
-export async function loadContext() {
+// --- Markdown Parsing ---
+
+function parseContextMd(content) {
+  const ctx = createEmptyContext();
+  if (!content || !content.trim()) return ctx;
+
+  const sections = content.split(/^## /m).slice(1); // split by ## headers
+
+  for (const section of sections) {
+    const [header, ...bodyLines] = section.split('\n');
+    const body = bodyLines.join('\n').trim();
+    const headerLower = header.trim().toLowerCase();
+
+    if (headerLower.startsWith('recent decisions')) {
+      ctx.decisions = parseListItems(body);
+    } else if (headerLower.startsWith('open questions')) {
+      ctx.open_questions = parseListItems(body);
+    } else if (headerLower.startsWith('last session')) {
+      ctx.last_session = body || null;
+    }
+  }
+
+  return ctx;
+}
+
+function parseListItems(body) {
+  const items = [];
+  for (const line of body.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('- ')) continue;
+    const content = trimmed.slice(2).trim();
+
+    // Try to extract date: "- [2026-02-28] text" or "- [Feb 28] text"
+    const dateMatch = content.match(/^\[([^\]]+)\]\s*(.+)$/);
+    if (dateMatch) {
+      items.push({ date: parseDateFlexible(dateMatch[1]), text: dateMatch[2] });
+    } else {
+      items.push({ date: new Date().toISOString().split('T')[0], text: content });
+    }
+  }
+  return items;
+}
+
+function parseDateFlexible(dateStr) {
+  // Accept "2026-02-28" or "Feb 28" format
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  // If it looks like "Feb 28", parse with current year
+  const withYear = new Date(`${dateStr}, ${new Date().getFullYear()}`);
+  if (!isNaN(withYear.getTime())) return withYear.toISOString().split('T')[0];
+  return new Date().toISOString().split('T')[0];
+}
+
+// --- Markdown Writing ---
+
+function renderContextMd(ctx) {
+  const lines = ['# Project Context', ''];
+
+  if (ctx.decisions.length > 0) {
+    lines.push('## Recent Decisions');
+    for (const d of ctx.decisions) {
+      lines.push(`- [${d.date}] ${d.text}`);
+    }
+    lines.push('');
+  }
+
+  if (ctx.open_questions.length > 0) {
+    lines.push('## Open Questions');
+    for (const q of ctx.open_questions) {
+      lines.push(`- ${q.text}`);
+    }
+    lines.push('');
+  }
+
+  if (ctx.last_session) {
+    lines.push('## Last Session');
+    lines.push(ctx.last_session);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+// --- Public API ---
+
+export async function loadProjectContext(projectDir) {
   try {
-    const content = await readFile(getContextPath(), 'utf8');
-    const data = parse(content);
-    if (!data) return createEmptyContext();
-    return {
-      focus: data.focus || [],
-      decisions: data.decisions || [],
-      open_questions: data.open_questions || [],
-    };
+    const content = await readFile(join(projectDir, 'context.md'), 'utf8');
+    return parseContextMd(content);
   } catch {
     return createEmptyContext();
   }
 }
 
-export async function updateContext(sessionContext) {
-  const ctx = await loadContext();
+export async function updateProjectContext(projectDir, sessionContext) {
+  const ctx = await loadProjectContext(projectDir);
   const today = new Date().toISOString().split('T')[0];
 
-  const merge = (existing, newTexts, max) => {
-    const existingTexts = new Set(existing.map(e => e.text));
-    const toAdd = newTexts
-      .filter(t => t && !existingTexts.has(t))
-      .map(t => ({ date: today, text: t }));
-    return [...toAdd, ...existing].slice(0, max);
-  };
+  // Merge decisions — dedup by text, newest first, FIFO cap
+  const existingTexts = new Set(ctx.decisions.map(d => d.text));
+  const newDecisions = (sessionContext.decisions || [])
+    .filter(t => t && !existingTexts.has(t))
+    .map(t => ({ date: today, text: t }));
+  ctx.decisions = [...newDecisions, ...ctx.decisions].slice(0, MAX_DECISIONS);
 
-  ctx.focus = merge(ctx.focus, sessionContext.topics || [], MAX_FOCUS);
-  ctx.decisions = merge(ctx.decisions, sessionContext.decisions || [], MAX_DECISIONS);
-  ctx.open_questions = merge(ctx.open_questions, sessionContext.open_questions || [], MAX_QUESTIONS);
+  // Merge open questions — dedup by text, newest first, cap
+  const existingQTexts = new Set(ctx.open_questions.map(q => q.text));
+  const newQuestions = (sessionContext.open_questions || [])
+    .filter(t => t && !existingQTexts.has(t))
+    .map(t => ({ date: today, text: t }));
+  ctx.open_questions = [...newQuestions, ...ctx.open_questions].slice(0, MAX_QUESTIONS);
 
-  const dir = getDir();
-  await mkdir(dir, { recursive: true });
-  await writeFile(getContextPath(), stringify({ version: 1, ...ctx }), 'utf8');
-  return ctx;
-}
-
-export async function pruneContext() {
-  const ctx = await loadContext();
-  const now = Date.now();
-
-  const filterByAge = (entries, ttlDays) =>
-    entries.filter(e => {
-      const age = (now - new Date(e.date).getTime()) / (1000 * 60 * 60 * 24);
-      return age <= ttlDays;
-    });
-
-  ctx.focus = filterByAge(ctx.focus, FOCUS_TTL_DAYS);
-  ctx.decisions = filterByAge(ctx.decisions, DECISIONS_TTL_DAYS);
-  ctx.open_questions = filterByAge(ctx.open_questions, QUESTIONS_TTL_DAYS);
-
-  const dir = getDir();
-  await mkdir(dir, { recursive: true });
-  await writeFile(getContextPath(), stringify({ version: 1, ...ctx }), 'utf8');
-  return ctx;
-}
-
-function formatShortDate(dateStr) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-export function renderContext(ctx) {
-  const sections = [];
-
-  if (ctx.focus.length > 0) {
-    const items = ctx.focus.map(f => `- [${formatShortDate(f.date)}] ${f.text}`).join('\n');
-    sections.push(`### Recent Focus\n${items}`);
+  // Last session — overwrite
+  if (sessionContext.summary) {
+    ctx.last_session = `*${today}* — ${sessionContext.summary}`;
   }
+
+  await mkdir(projectDir, { recursive: true });
+  await writeFile(join(projectDir, 'context.md'), renderContextMd(ctx), 'utf8');
+  return ctx;
+}
+
+export function renderProjectContext(ctx) {
+  const sections = [];
 
   if (ctx.decisions.length > 0) {
     const items = ctx.decisions.map(d => `- ${d.text}`).join('\n');
-    sections.push(`### Key Decisions\n${items}`);
+    sections.push(`### Recent Decisions\n${items}`);
   }
 
   if (ctx.open_questions.length > 0) {
@@ -100,6 +143,10 @@ export function renderContext(ctx) {
     sections.push(`### Open Questions\n${items}`);
   }
 
+  if (ctx.last_session) {
+    sections.push(`### Last Session\n${ctx.last_session}`);
+  }
+
   if (sections.length === 0) return null;
-  return `## Active Context\n\n${sections.join('\n\n')}`;
+  return `## Project Context\n\n${sections.join('\n\n')}`;
 }
