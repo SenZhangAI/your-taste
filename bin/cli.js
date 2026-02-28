@@ -28,7 +28,7 @@ if (command === 'init') {
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
-  console.log('  init              Scan past sessions and build your preference profile');
+  console.log('  init              Scan past sessions and build your taste profile');
   console.log('    --all           Scan all sessions (slow, higher cost)');
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
@@ -97,7 +97,7 @@ async function runInit() {
   console.log('');
 
   if (!result) {
-    console.log('No preference signals found in past sessions.');
+    console.log('No taste signals found in past sessions.');
     console.log('Keep using Claude Code \u2014 your-taste will learn from your conversations.');
     process.exit(0);
   }
