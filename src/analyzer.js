@@ -1,12 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { readFile } from 'fs/promises';
+import { complete } from './llm.js';
 import { DIMENSIONS } from './dimensions.js';
 
 export async function analyzeTranscript(conversationText, pendingRuleTexts = []) {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { signals: [], rules: [] };
-  }
-
   const promptTemplate = await readFile(
     new URL('../prompts/extract-preferences.md', import.meta.url),
     'utf8',
@@ -27,15 +23,8 @@ export async function analyzeTranscript(conversationText, pendingRuleTexts = [])
     .replace('{{PENDING_RULES}}', pendingSection)
     .replace('{{TRANSCRIPT}}', conversationText);
 
-  const client = new Anthropic();
-
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  return parseAnalysisResponse(response.content[0].text);
+  const response = await complete(prompt);
+  return parseAnalysisResponse(response);
 }
 
 export function parseAnalysisResponse(text) {
@@ -43,7 +32,7 @@ export function parseAnalysisResponse(text) {
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const result = JSON.parse(cleaned);
 
-    if (result.session_quality === 'none') return { signals: [], rules: [] };
+    if (result.session_quality === 'none') return { signals: [], rules: [], context: null };
 
     const signals = (result.signals || []).filter(
       s => DIMENSIONS[s.dimension] && typeof s.score === 'number',
@@ -53,8 +42,10 @@ export function parseAnalysisResponse(text) {
       r => typeof r === 'string' && r.trim().length > 0,
     );
 
-    return { signals, rules };
+    const context = result.session_context || null;
+
+    return { signals, rules, context };
   } catch {
-    return { signals: [], rules: [] };
+    return { signals: [], rules: [], context: null };
   }
 }

@@ -63,4 +63,39 @@ describe('analyzer response parsing', () => {
     const result = parseAnalysisResponse(json);
     expect(result.rules).toEqual(['Valid rule', 'Another valid']);
   });
+
+  it('parses session_context when present', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'medium',
+      session_context: {
+        topics: ['product repositioning'],
+        decisions: ['use YAML storage'],
+        open_questions: ['size limits'],
+      },
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.context).toEqual({
+      topics: ['product repositioning'],
+      decisions: ['use YAML storage'],
+      open_questions: ['size limits'],
+    });
+  });
+
+  it('returns null context when session_context is missing', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [],
+      session_quality: 'medium',
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.context).toBeNull();
+  });
+
+  it('returns null context on session_quality none', () => {
+    const json = JSON.stringify({ signals: [], candidate_rules: [], session_quality: 'none' });
+    const result = parseAnalysisResponse(json);
+    expect(result.context).toBeNull();
+  });
 });
