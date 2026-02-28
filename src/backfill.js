@@ -64,18 +64,18 @@ export async function discoverSessions(projectsDir, filter = {}) {
 
 /**
  * Process a single session transcript through the analysis pipeline.
- * Returns extracted signals, or empty array if the session is too short.
+ * Returns { signals, context } or { signals: [] } if the session is too short.
  */
 export async function processSession(transcriptPath) {
   const messages = await parseTranscript(transcriptPath);
-  if (messages.length < 4) return [];
+  if (messages.length < 4) return { signals: [] };
 
   const conversation = extractConversation(messages);
-  if (conversation.length < 200) return [];
+  if (conversation.length < 200) return { signals: [] };
 
   const filtered = filterSensitiveData(conversation);
-  const { signals } = await analyzeTranscript(filtered);
-  return signals;
+  const { signals, context } = await analyzeTranscript(filtered);
+  return { signals, context };
 }
 
 /**
@@ -95,8 +95,8 @@ export async function backfill(projectsDir, options = {}) {
     const results = await Promise.allSettled(batch.map(p => processSession(p)));
 
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.length > 0) {
-        allSignals.push(...result.value);
+      if (result.status === 'fulfilled' && result.value.signals.length > 0) {
+        allSignals.push(...result.value.signals);
         processed++;
       } else {
         skipped++;
