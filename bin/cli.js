@@ -28,20 +28,41 @@ if (command === 'init') {
 }
 
 async function runInit() {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    console.error('Error: ANTHROPIC_API_KEY is not set.\n');
+    console.error('your-taste needs an Anthropic API key to analyze your sessions.');
+    console.error('Set it in your shell profile:\n');
+    console.error('  export ANTHROPIC_API_KEY=sk-ant-...\n');
+    process.exit(1);
+  }
+
   console.log('Scanning past sessions...\n');
 
   const concurrency = process.stdout.isTTY ? 5 : 10;
+  let lastLog = 0;
 
   const result = await backfill(PROJECTS_DIR, {
     concurrency,
     onProgress({ processed, skipped, total, current }) {
-      const pct = Math.round((current / total) * 100);
-      const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
-      process.stdout.write(`\rAnalyzing... ${bar} ${current}/${total}`);
+      // In non-TTY (Claude Code Bash), use newlines at intervals
+      // In TTY (terminal), use carriage return for in-place update
+      if (process.stdout.isTTY) {
+        const pct = Math.round((current / total) * 100);
+        const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
+        process.stdout.write(`\rAnalyzing... ${bar} ${current}/${total}`);
+      } else {
+        const pct = Math.round((current / total) * 100);
+        // Log every 10%
+        const bucket = Math.floor(pct / 10) * 10;
+        if (bucket > lastLog || current === total) {
+          lastLog = bucket;
+          console.log(`Analyzing... ${current}/${total} (${pct}%)`);
+        }
+      }
     },
   });
 
-  console.log('\n');
+  console.log('');
 
   if (!result) {
     console.log('No preference signals found in past sessions.');
