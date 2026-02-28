@@ -1,18 +1,48 @@
 # your-taste
 
-**AI learns your decision-making style, not your skill level.**
+**Your AI has massive potential. It's barely being used.**
 
-A Claude Code plugin that observes how you work with AI, discovers what you truly care about, and applies it automatically — so every session feels like working with someone who *gets you*.
+Every AI coding session starts the same way — the AI knows nothing about you. Your thinking patterns, your design philosophy, what you've been working on, the decisions you've already made. So you spend half the session re-explaining context, correcting assumptions, and nudging the AI toward what you actually want.
 
-## Principles
+The bottleneck isn't AI capability. It's that **AI doesn't know you**.
 
-> **Taste ≠ Skill** — Your AI learns your direction, not your ability.
+your-taste fixes this. It's a Claude Code plugin that learns how you think, what you care about, and what you're working on — then applies it automatically, every session.
 
-> **Your AI should know you by now.**
+<!-- TODO: GIF comparison — with vs without your-taste on the same task -->
 
-> **Understood, not just analyzed.**
+## Who This Is For
 
-> **Style, not only standards.** — Taste shapes how the AI works with you, on top of the quality bar.
+**Heavy AI users who want their AI to be proactive, not reactive.**
+
+If you've ever thought:
+- "I just explained this three sessions ago"
+- "Stop listing 5 options — just pick the best one"
+- "You know my codebase, why are you still asking basic questions?"
+- "I shouldn't have to tell you my preferences every time"
+
+Then you're fighting the same problem your-taste was built to solve.
+
+This is not for casual AI users. It's for people who treat AI as a daily collaborator and expect it to get better at working with *them* over time.
+
+## Design Philosophy
+
+### 1. The gap isn't intelligence — it's context
+
+AI models are extraordinarily capable. But capability without context produces generic output. The same model that writes brilliant code for one developer produces mediocre suggestions for another — not because it's less capable, but because it doesn't know what "good" means *to that person*.
+
+### 2. Understanding you is the unlock
+
+When AI knows your decision-making patterns, your design philosophy, and your current strategic context, something changes. It stops being a tool you direct and starts being a collaborator that anticipates. It infers your *intent*, not just your *instruction*.
+
+You say C, but you thought A → B → C. A great collaborator traces back to A and works forward from there — considering implications you haven't stated yet.
+
+### 3. Taste ≠ Skill
+
+your-taste learns your *direction*, not your *ability*. If you lean minimalist, the AI delivers expert-level simplification — not naive implementations. Your taste sets the direction; professional quality is non-negotiable.
+
+### 4. Behavior > Declaration (with limits)
+
+We learn from what you *do*, not what you *say*. Your corrections, your choices, your pushbacks in real sessions — these are the real signal. But behavior has limits: observing *what* you do doesn't always reveal *why* you do it. That's why the system also infers the underlying principles behind your actions.
 
 ## What You Get
 
@@ -20,18 +50,16 @@ A Claude Code plugin that observes how you work with AI, discovers what you trul
 
 **Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste translates your preferences into concrete behavioral instructions — deterministic, testable, applied the same way every time.
 
-**Zero effort.** No config files to maintain. No questionnaires. The plugin watches how you respond to AI proposals — your corrections, your choices, your pushbacks — and learns silently. You just work.
+**Zero effort.** No config files to maintain. No questionnaires. The plugin watches how you respond to AI proposals and learns silently. You just work.
 
 **Your data stays yours.** Everything lives locally on your machine. No project code, no business logic, no conversation content is ever stored — just preference scores and distilled taste statements. Wide in, narrow out.
-
-**You'll feel understood.** Most tools show you a score. your-taste distills your thinking into design philosophy — short statements like *"Clean breaks over compatibility debt"* or *"Code should explain itself"* that capture how you think, not just what you do.
 
 ## How It Works
 
 ```
-Session ends → Read transcript → Filter sensitive data → Extract preference signals → Update profile
-                                                                                          ↓
-Session starts → Load profile → Render behavioral instructions → AI applies your taste ← ←
+Session ends → Read transcript → Filter sensitive data → Extract signals → Update profile
+                                                                                    ↓
+Session starts → Load profile → Render behavioral instructions → AI applies your taste
 ```
 
 1. **SessionEnd hook** reads the conversation transcript
@@ -50,8 +78,6 @@ Session starts → Load profile → Render behavioral instructions → AI applie
 | **Communication** | Direct — brief, action-oriented | Detailed — thorough explanations |
 | **Quality vs Speed** | Pragmatic — ship fast, iterate | Perfectionist — quality first |
 | **Exploration** | Focused — stick to the task | Exploratory — improve surroundings |
-
-Scores capture your *direction*, not your *skill*. If you lean minimalist, the AI delivers expert-level simplification — not naive implementations.
 
 ## Quick Start
 
@@ -113,7 +139,7 @@ Set `YOUR_TASTE_DIR` to change the storage location.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for what's next — from instruction rendering to taste cards to cross-platform support.
+See [ROADMAP.md](ROADMAP.md) for what's next — from context acceleration to cross-platform support.
 
 ## License
 
