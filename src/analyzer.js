@@ -4,7 +4,7 @@ import { DIMENSIONS } from './dimensions.js';
 
 export async function analyzeTranscript(conversationText, pendingRuleTexts = []) {
   const promptTemplate = await readFile(
-    new URL('../prompts/extract-preferences.md', import.meta.url),
+    new URL('../prompts/analyze-session.md', import.meta.url),
     'utf8',
   );
 
