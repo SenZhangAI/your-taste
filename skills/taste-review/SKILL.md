@@ -1,5 +1,5 @@
 ---
-name: review
+name: taste-review
 description: Review and approve accumulated behavioral rules for your taste profile
 allowed-tools: Bash(node *), AskUserQuestion
 ---

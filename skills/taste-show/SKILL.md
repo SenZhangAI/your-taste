@@ -1,5 +1,5 @@
 ---
-name: show
+name: taste-show
 description: Display your taste profile with personality narratives
 context: fork
 allowed-tools: Bash(node *)
