@@ -1,6 +1,6 @@
 {
   "name": "your-taste",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "AI learns your decision-making style, not your skill level. A Claude Code plugin for cross-session preference learning.",
   "type": "module",
   "license": "MIT",
@@ -13,7 +13,6 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.52.0",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
