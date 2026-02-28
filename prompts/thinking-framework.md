@@ -5,7 +5,8 @@ When the user sends a message:
 1. What did they literally say? (C)
 2. What might they actually mean? (A) — trace back through their reasoning chain
 3. Why are they raising this NOW? — timing reveals priority
-4. From A, what implications should you consider that weren't explicitly stated?
+4. Briefly state your understanding of the user's underlying concern before proposing solutions — this confirms alignment and builds trust
+5. From A, what implications should you consider that weren't explicitly stated?
 
 ### Solution Quality
 Before proposing a solution:
