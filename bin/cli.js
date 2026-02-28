@@ -20,29 +20,51 @@ if (command === 'init') {
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
-  console.log('  init          Scan past sessions and build your preference profile');
-  console.log('  show          Display your taste profile');
-  console.log('  review-data   Output pending rules as JSON (for skills)');
-  console.log('  review-apply  Apply review decisions from stdin JSON (for skills)');
+  console.log('  init              Scan past sessions and build your preference profile');
+  console.log('    --all           Scan all sessions (slow, higher cost)');
+  console.log('    --days <N>      Scan sessions from last N days');
+  console.log('    --max <N>       Scan at most N sessions (default: 50)');
+  console.log('  show              Display your taste profile');
+  console.log('  review-data       Output pending rules as JSON (for skills)');
+  console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
   process.exit(1);
 }
 
-async function runInit() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error('Error: ANTHROPIC_API_KEY is not set.\n');
-    console.error('your-taste needs an Anthropic API key to analyze your sessions.');
-    console.error('Set it in your shell profile:\n');
-    console.error('  export ANTHROPIC_API_KEY=sk-ant-...\n');
-    process.exit(1);
+function parseInitFlags() {
+  const args = process.argv.slice(3);
+  const filter = {};
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--all') {
+      filter.all = true;
+    } else if (args[i] === '--days' && args[i + 1]) {
+      filter.days = parseInt(args[++i], 10);
+    } else if (args[i] === '--max' && args[i + 1]) {
+      filter.maxSessions = parseInt(args[++i], 10);
+    }
   }
 
-  console.log('Scanning past sessions...\n');
+  return filter;
+}
 
-  const concurrency = process.stdout.isTTY ? 5 : 10;
+async function runInit() {
+  const filter = parseInitFlags();
+
+  if (filter.all) {
+    console.log('Scanning ALL past sessions (--all)...\n');
+  } else if (filter.days) {
+    console.log(`Scanning sessions from the last ${filter.days} days...\n`);
+  } else {
+    const max = filter.maxSessions || 50;
+    console.log(`Scanning up to ${max} most recent sessions (use --all for full scan)...\n`);
+  }
+
+  const concurrency = 3; // claude -p subprocess has overhead, keep modest
   let lastLog = 0;
 
   const result = await backfill(PROJECTS_DIR, {
     concurrency,
+    filter,
     onProgress({ processed, skipped, total, current }) {
       // In non-TTY (Claude Code Bash), use newlines at intervals
       // In TTY (terminal), use carriage return for in-place update

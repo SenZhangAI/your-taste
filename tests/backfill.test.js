@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, writeFile, rm } from 'fs/promises';
+import { mkdir, writeFile, rm, utimes } from 'fs/promises';
 import { discoverSessions } from '../src/backfill.js';
 
 const TEST_PROJECTS = '/tmp/your-taste-test-projects';
@@ -18,7 +18,7 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
     await writeFile(`${TEST_PROJECTS}/project-a/session2.jsonl`, '{}');
     await writeFile(`${TEST_PROJECTS}/project-b/session3.jsonl`, '{}');
-    const sessions = await discoverSessions(TEST_PROJECTS);
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
     expect(sessions).toHaveLength(3);
     expect(sessions.every(s => s.endsWith('.jsonl'))).toBe(true);
   });
@@ -27,7 +27,7 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
     await mkdir(`${TEST_PROJECTS}/project-a/session1/subagents`, { recursive: true });
     await writeFile(`${TEST_PROJECTS}/project-a/session1/subagents/agent-abc.jsonl`, '{}');
-    const sessions = await discoverSessions(TEST_PROJECTS);
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toContain('session1.jsonl');
   });
@@ -35,5 +35,52 @@ describe('backfill session discovery', () => {
   it('returns empty array for nonexistent directory', async () => {
     const sessions = await discoverSessions('/tmp/nonexistent-dir-xyz');
     expect(sessions).toHaveLength(0);
+  });
+
+  it('respects maxSessions limit', async () => {
+    for (let i = 0; i < 5; i++) {
+      await writeFile(`${TEST_PROJECTS}/project-a/session${i}.jsonl`, '{}');
+    }
+    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 3 });
+    expect(sessions).toHaveLength(3);
+  });
+
+  it('filters by days', async () => {
+    const fresh = `${TEST_PROJECTS}/project-a/fresh.jsonl`;
+    const stale = `${TEST_PROJECTS}/project-a/stale.jsonl`;
+    await writeFile(fresh, '{}');
+    await writeFile(stale, '{}');
+
+    // Set stale file mtime to 60 days ago
+    const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    await utimes(stale, past, past);
+
+    const sessions = await discoverSessions(TEST_PROJECTS, { days: 30 });
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toContain('fresh.jsonl');
+  });
+
+  it('sorts by most recent first', async () => {
+    const older = `${TEST_PROJECTS}/project-a/older.jsonl`;
+    const newer = `${TEST_PROJECTS}/project-a/newer.jsonl`;
+    await writeFile(older, '{}');
+
+    // Set older file mtime to 2 days ago
+    const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await utimes(older, past, past);
+
+    await writeFile(newer, '{}');
+
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
+    expect(sessions[0]).toContain('newer.jsonl');
+    expect(sessions[1]).toContain('older.jsonl');
+  });
+
+  it('defaults to 50 max without explicit filter', async () => {
+    // Just verify the default path works (we won't create 51 files)
+    await writeFile(`${TEST_PROJECTS}/project-a/s1.jsonl`, '{}');
+    await writeFile(`${TEST_PROJECTS}/project-a/s2.jsonl`, '{}');
+    const sessions = await discoverSessions(TEST_PROJECTS);
+    expect(sessions).toHaveLength(2); // under cap, all returned
   });
 });

@@ -5,12 +5,19 @@ import { filterSensitiveData } from './privacy.js';
 import { analyzeTranscript } from './analyzer.js';
 import { createDefaultProfile, updateProfile } from './profile.js';
 
+const DEFAULT_MAX_SESSIONS = 50;
+
 /**
  * Scan projectsDir for JSONL session transcript files.
- * Returns full paths to all .jsonl files that are direct children of project subdirs,
- * skipping any inside subagents/ directories.
+ * Returns paths sorted by mtime (most recent first), filtered by options.
+ *
+ * @param {string} projectsDir
+ * @param {object} [filter]
+ * @param {number} [filter.maxSessions] - Cap on number of sessions to return
+ * @param {number} [filter.days] - Only include sessions modified within this many days
+ * @param {boolean} [filter.all] - Ignore limits, return everything
  */
-export async function discoverSessions(projectsDir) {
+export async function discoverSessions(projectsDir, filter = {}) {
   let projectDirs;
   try {
     projectDirs = await readdir(projectsDir);
@@ -28,11 +35,31 @@ export async function discoverSessions(projectsDir) {
     const entries = await readdir(projectPath);
     for (const entry of entries) {
       if (!entry.endsWith('.jsonl')) continue;
-      sessions.push(join(projectPath, entry));
+      const fullPath = join(projectPath, entry);
+      const fileStat = await stat(fullPath).catch(() => null);
+      if (!fileStat) continue;
+      sessions.push({ path: fullPath, mtime: fileStat.mtimeMs });
     }
   }
 
-  return sessions;
+  // Sort by most recent first
+  sessions.sort((a, b) => b.mtime - a.mtime);
+
+  let filtered = sessions;
+
+  if (!filter.all) {
+    // Apply days filter
+    if (filter.days) {
+      const cutoff = Date.now() - filter.days * 24 * 60 * 60 * 1000;
+      filtered = filtered.filter(s => s.mtime >= cutoff);
+    }
+
+    // Apply max sessions cap (default 50)
+    const max = filter.maxSessions || DEFAULT_MAX_SESSIONS;
+    filtered = filtered.slice(0, max);
+  }
+
+  return filtered.map(s => s.path);
 }
 
 /**
@@ -55,9 +82,9 @@ export async function processSession(transcriptPath) {
  * Orchestrate full backfill: discover sessions, analyze in batches, build profile.
  */
 export async function backfill(projectsDir, options = {}) {
-  const { concurrency = 3, onProgress } = options;
+  const { concurrency = 3, onProgress, filter } = options;
 
-  const sessionPaths = await discoverSessions(projectsDir);
+  const sessionPaths = await discoverSessions(projectsDir, filter);
   const total = sessionPaths.length;
   let processed = 0;
   let skipped = 0;
