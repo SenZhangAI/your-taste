@@ -4,7 +4,7 @@ import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 import { readPending, removePendingRules } from '../src/pending.js';
 import { readTasteFile, appendRules } from '../src/taste-file.js';
-import { loadGoal } from '../src/goal.js';
+import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
@@ -23,6 +23,8 @@ if (command === 'init') {
   await runReviewApply();
 } else if (command === 'status') {
   await runStatus();
+} else if (command === 'goal') {
+  await runGoal();
 } else {
   console.log('Usage: taste <command>\n');
   console.log('Commands:');
@@ -32,6 +34,7 @@ if (command === 'init') {
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
   console.log('  show              Display your taste profile');
   console.log('  status            Show what your-taste knows about you and this project');
+  console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
   process.exit(1);
@@ -244,4 +247,23 @@ async function runStatus() {
   }
 
   console.log('');
+}
+
+async function runGoal() {
+  let projectDir;
+  try {
+    projectDir = await ensureProjectDir(process.cwd());
+  } catch {
+    console.error('Could not determine project directory for current path.');
+    process.exit(1);
+  }
+
+  const { path, created } = await createGoalTemplate(projectDir);
+
+  if (created) {
+    console.log(`Created goal template: ${path}`);
+    console.log('Edit this file to set your project vision, constraints, and architectural decisions.');
+  } else {
+    console.log(`Goal file: ${path}`);
+  }
 }
