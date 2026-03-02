@@ -1,4 +1,6 @@
-import { readdir, stat, readFile, writeFile, mkdir, open } from 'fs/promises';
+import { readdir, stat, readFile, writeFile, mkdir } from 'fs/promises';
+import { createReadStream } from 'fs';
+import { createInterface } from 'readline';
 import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
@@ -7,6 +9,7 @@ import { createDefaultProfile, updateProfile } from './profile.js';
 import { readPending, updatePending, getPendingRuleTexts } from './pending.js';
 import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from './signals.js';
 import { hasLangFile, writeLang } from './lang.js';
+import { META_MARKER } from './llm.js';
 import { debug } from './debug.js';
 
 const DEFAULT_MAX_SESSIONS = 50;
@@ -17,9 +20,18 @@ const PROCESSED_PATH = `${process.env.HOME}/.your-taste/processed.json`;
 // Viable sessions are typically 14KB+; junk (too few messages, too short) median 5-7KB.
 const MIN_FILE_SIZE = 10_000;
 
-// Signature to detect meta-sessions (taste init's own claude -p calls persisted as JSONL).
-// Checked against the first line of each file — cheap O(1) read, no full parse needed.
-const META_SESSION_SIGNATURE = 'You are a session analyst';
+// Signatures to detect meta-sessions (taste init's own claude -p calls, skill invocations,
+// and automated agent sessions that don't contain real user decision-making).
+// Checked against the first 2KB of each file — cheap O(1) read, no full parse needed.
+const META_SESSION_MARKERS = [
+  META_MARKER,                        // explicit marker prepended to all LLM prompts
+  'You are a session analyst',        // legacy: old extract prompt
+  'You are a JSON-only',             // legacy: old signal extractor prompt
+  'your-taste/skills/',              // skill invocation (file path in content)
+  'you are continuing to observe',   // claude-mem observer agent
+  'You are a Claude-Mem',            // claude-mem observer agent (alternate start)
+  'claude-mem-observer',             // claude-mem project directory in path
+];
 
 /**
  * Convert a filesystem path to its Claude Code project directory name.
@@ -30,22 +42,54 @@ function toClaudeProjectDirName(fsPath) {
 }
 
 /**
- * Check if a session file is a meta-session (from taste init's own claude -p calls).
- * Reads only the first line — O(1) regardless of file size.
+ * Check if a session file is a meta-session (from taste init's own claude -p calls
+ * or skill invocations). Scans the first few user/assistant messages for markers.
+ *
+ * JSONL files start with metadata lines (progress, hook events), so raw byte reads
+ * miss the actual content. Instead we parse lines until we find enough content.
  */
 async function isMetaSession(filePath) {
-  let fh;
+  const rl = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  let contentChecked = 0;
+  let totalLines = 0;
+  const MAX_CONTENT_LINES = 5; // check first 5 content messages
+  const MAX_TOTAL_LINES = 50;  // give up scanning after this many JSONL lines
+
   try {
-    fh = await open(filePath, 'r');
-    const buf = Buffer.alloc(512);
-    const { bytesRead } = await fh.read(buf, 0, 512, 0);
-    const firstLine = buf.toString('utf8', 0, bytesRead).split('\n')[0];
-    return firstLine.includes(META_SESSION_SIGNATURE);
-  } catch {
-    return false;
-  } finally {
-    await fh?.close();
-  }
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let parsed;
+      try { parsed = JSON.parse(line); } catch { continue; }
+
+      totalLines++;
+      if (totalLines >= MAX_TOTAL_LINES) break;
+
+      // Only check user/assistant message lines with text content
+      const type = parsed.type;
+      if (type !== 'user' && type !== 'assistant') continue;
+
+      const content = parsed.message?.content ?? parsed.content;
+      const text = typeof content === 'string' ? content
+        : Array.isArray(content) ? content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+        : null;
+      if (!text) continue;
+
+      if (META_SESSION_MARKERS.some(marker => text.includes(marker))) {
+        rl.close();
+        return true;
+      }
+
+      contentChecked++;
+      if (contentChecked >= MAX_CONTENT_LINES) break;
+    }
+  } catch { /* read error — not meta */ }
+
+  rl.close();
+
+  // No user/assistant messages found → not a real session (e.g., queue-operation files)
+  if (contentChecked === 0) return true;
+
+  return false;
 }
 
 /**
@@ -74,6 +118,12 @@ export async function discoverSessions(projectsDir, filter = {}, currentProjectP
   const sessions = [];
 
   for (const projectName of projectDirs) {
+    // Skip project directories that are known automated/agent sessions
+    if (META_SESSION_MARKERS.some(m => projectName.includes(m))) {
+      debug(`discover: skipping automated project "${projectName}"`);
+      continue;
+    }
+
     const projectPath = join(projectsDir, projectName);
     const info = await stat(projectPath).catch(() => null);
     if (!info?.isDirectory()) continue;
@@ -140,9 +190,6 @@ async function saveProcessed(set) {
 // Conversation text beyond this is truncated (keep tail — recent interactions have richer signal)
 const MAX_CONVERSATION_CHARS = 30_000;
 
-// Also detect the new Pass 1 prompt signature
-const META_SESSION_SIGNATURES = ['You are a session analyst', 'You are a JSON-only signal extractor'];
-
 /**
  * Prepare a session transcript for analysis.
  * Returns filtered conversation text, or null if the session should be skipped.
@@ -152,11 +199,6 @@ export function prepareConversation(messages) {
 
   let conversation = extractConversation(messages, { compact: true });
   if (conversation.length < 200) return null;
-
-  // Skip meta-sessions
-  for (const sig of META_SESSION_SIGNATURES) {
-    if (conversation.includes(sig)) return null;
-  }
 
   if (conversation.length > MAX_CONVERSATION_CHARS) {
     conversation = '...(earlier conversation truncated)...\n\n' + conversation.slice(-MAX_CONVERSATION_CHARS);

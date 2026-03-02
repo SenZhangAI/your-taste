@@ -4,6 +4,9 @@ import { discoverSessions, prepareConversation } from '../src/backfill.js';
 
 const TEST_PROJECTS = '/tmp/your-taste-test-projects';
 
+// Minimal valid session content — enough for isMetaSession to see a real user message
+const VALID_SESSION = '{"type":"user","message":{"role":"user","content":[{"type":"text","text":"hello"}]}}\n{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"hi"}]}}';
+
 describe('backfill session discovery', () => {
   beforeEach(async () => {
     await mkdir(`${TEST_PROJECTS}/project-a`, { recursive: true });
@@ -15,18 +18,18 @@ describe('backfill session discovery', () => {
   });
 
   it('finds JSONL files in project directories', async () => {
-    await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
-    await writeFile(`${TEST_PROJECTS}/project-a/session2.jsonl`, '{}');
-    await writeFile(`${TEST_PROJECTS}/project-b/session3.jsonl`, '{}');
+    await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, VALID_SESSION);
+    await writeFile(`${TEST_PROJECTS}/project-a/session2.jsonl`, VALID_SESSION);
+    await writeFile(`${TEST_PROJECTS}/project-b/session3.jsonl`, VALID_SESSION);
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(3);
     expect(sessions.every(s => s.endsWith('.jsonl'))).toBe(true);
   });
 
   it('ignores subagent transcripts', async () => {
-    await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
+    await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, VALID_SESSION);
     await mkdir(`${TEST_PROJECTS}/project-a/session1/subagents`, { recursive: true });
-    await writeFile(`${TEST_PROJECTS}/project-a/session1/subagents/agent-abc.jsonl`, '{}');
+    await writeFile(`${TEST_PROJECTS}/project-a/session1/subagents/agent-abc.jsonl`, VALID_SESSION);
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toContain('session1.jsonl');
@@ -39,7 +42,7 @@ describe('backfill session discovery', () => {
 
   it('respects maxSessions limit', async () => {
     for (let i = 0; i < 5; i++) {
-      await writeFile(`${TEST_PROJECTS}/project-a/session${i}.jsonl`, '{}');
+      await writeFile(`${TEST_PROJECTS}/project-a/session${i}.jsonl`, VALID_SESSION);
     }
     const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 3, minSize: 0 });
     expect(sessions).toHaveLength(3);
@@ -48,8 +51,8 @@ describe('backfill session discovery', () => {
   it('filters by days', async () => {
     const fresh = `${TEST_PROJECTS}/project-a/fresh.jsonl`;
     const stale = `${TEST_PROJECTS}/project-a/stale.jsonl`;
-    await writeFile(fresh, '{}');
-    await writeFile(stale, '{}');
+    await writeFile(fresh, VALID_SESSION);
+    await writeFile(stale, VALID_SESSION);
 
     // Set stale file mtime to 60 days ago
     const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
@@ -63,13 +66,13 @@ describe('backfill session discovery', () => {
   it('sorts by most recent first', async () => {
     const older = `${TEST_PROJECTS}/project-a/older.jsonl`;
     const newer = `${TEST_PROJECTS}/project-a/newer.jsonl`;
-    await writeFile(older, '{}');
+    await writeFile(older, VALID_SESSION);
 
     // Set older file mtime to 2 days ago
     const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
     await utimes(older, past, past);
 
-    await writeFile(newer, '{}');
+    await writeFile(newer, VALID_SESSION);
 
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions[0]).toContain('newer.jsonl');
@@ -78,8 +81,8 @@ describe('backfill session discovery', () => {
 
   it('defaults to 50 max without explicit filter', async () => {
     // Just verify the default path works (we won't create 51 files)
-    await writeFile(`${TEST_PROJECTS}/project-a/s1.jsonl`, '{}');
-    await writeFile(`${TEST_PROJECTS}/project-a/s2.jsonl`, '{}');
+    await writeFile(`${TEST_PROJECTS}/project-a/s1.jsonl`, VALID_SESSION);
+    await writeFile(`${TEST_PROJECTS}/project-a/s2.jsonl`, VALID_SESSION);
     const sessions = await discoverSessions(TEST_PROJECTS, { minSize: 0 });
     expect(sessions).toHaveLength(2); // under cap, all returned
   });
@@ -91,10 +94,10 @@ describe('backfill session discovery', () => {
     await mkdir(`${TEST_PROJECTS}/-Users-me-project-a`, { recursive: true });
     await mkdir(`${TEST_PROJECTS}/-Users-me-project-b`, { recursive: true });
 
-    await writeFile(oldA, '{}');
+    await writeFile(oldA, VALID_SESSION);
     const past = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
     await utimes(oldA, past, past);
-    await writeFile(newB, '{}');
+    await writeFile(newB, VALID_SESSION);
 
     // Without priority: newer (project-b) comes first
     const noPriority = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
@@ -112,8 +115,8 @@ describe('backfill session discovery', () => {
 
     // Create 3 sessions in current project, 3 in other
     for (let i = 0; i < 3; i++) {
-      await writeFile(`${TEST_PROJECTS}/-Users-me-myproj/s${i}.jsonl`, '{}');
-      await writeFile(`${TEST_PROJECTS}/-Users-me-other/o${i}.jsonl`, '{}');
+      await writeFile(`${TEST_PROJECTS}/-Users-me-myproj/s${i}.jsonl`, VALID_SESSION);
+      await writeFile(`${TEST_PROJECTS}/-Users-me-other/o${i}.jsonl`, VALID_SESSION);
     }
 
     // With max=4, all 3 current-project sessions should be included
@@ -130,7 +133,7 @@ describe('prepareConversation', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null for meta-sessions', () => {
+  it('returns null for too-short conversations', () => {
     const messages = [
       { type: 'user', content: 'You are a JSON-only signal extractor. Analyze this.' },
       { type: 'assistant', content: '{"decision_points": []}' },
