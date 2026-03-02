@@ -18,7 +18,7 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
     await writeFile(`${TEST_PROJECTS}/project-a/session2.jsonl`, '{}');
     await writeFile(`${TEST_PROJECTS}/project-b/session3.jsonl`, '{}');
-    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(3);
     expect(sessions.every(s => s.endsWith('.jsonl'))).toBe(true);
   });
@@ -27,7 +27,7 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-a/session1.jsonl`, '{}');
     await mkdir(`${TEST_PROJECTS}/project-a/session1/subagents`, { recursive: true });
     await writeFile(`${TEST_PROJECTS}/project-a/session1/subagents/agent-abc.jsonl`, '{}');
-    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toContain('session1.jsonl');
   });
@@ -41,7 +41,7 @@ describe('backfill session discovery', () => {
     for (let i = 0; i < 5; i++) {
       await writeFile(`${TEST_PROJECTS}/project-a/session${i}.jsonl`, '{}');
     }
-    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 3 });
+    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 3, minSize: 0 });
     expect(sessions).toHaveLength(3);
   });
 
@@ -55,7 +55,7 @@ describe('backfill session discovery', () => {
     const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
     await utimes(stale, past, past);
 
-    const sessions = await discoverSessions(TEST_PROJECTS, { days: 30 });
+    const sessions = await discoverSessions(TEST_PROJECTS, { days: 30, minSize: 0 });
     expect(sessions).toHaveLength(1);
     expect(sessions[0]).toContain('fresh.jsonl');
   });
@@ -71,7 +71,7 @@ describe('backfill session discovery', () => {
 
     await writeFile(newer, '{}');
 
-    const sessions = await discoverSessions(TEST_PROJECTS, { all: true });
+    const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions[0]).toContain('newer.jsonl');
     expect(sessions[1]).toContain('older.jsonl');
   });
@@ -80,7 +80,7 @@ describe('backfill session discovery', () => {
     // Just verify the default path works (we won't create 51 files)
     await writeFile(`${TEST_PROJECTS}/project-a/s1.jsonl`, '{}');
     await writeFile(`${TEST_PROJECTS}/project-a/s2.jsonl`, '{}');
-    const sessions = await discoverSessions(TEST_PROJECTS);
+    const sessions = await discoverSessions(TEST_PROJECTS, { minSize: 0 });
     expect(sessions).toHaveLength(2); // under cap, all returned
   });
 
@@ -97,11 +97,11 @@ describe('backfill session discovery', () => {
     await writeFile(newB, '{}');
 
     // Without priority: newer (project-b) comes first
-    const noPriority = await discoverSessions(TEST_PROJECTS, { all: true });
+    const noPriority = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(noPriority[0]).toContain('project-b');
 
     // With priority: project-a comes first despite being older
-    const withPriority = await discoverSessions(TEST_PROJECTS, { all: true }, '/Users/me/project-a');
+    const withPriority = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 }, '/Users/me/project-a');
     expect(withPriority[0]).toContain('project-a');
     expect(withPriority[1]).toContain('project-b');
   });
@@ -117,7 +117,7 @@ describe('backfill session discovery', () => {
     }
 
     // With max=4, all 3 current-project sessions should be included
-    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 4 }, '/Users/me/myproj');
+    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 4, minSize: 0 }, '/Users/me/myproj');
     const currentCount = sessions.filter(s => s.includes('-Users-me-myproj')).length;
     expect(currentCount).toBe(3);
     expect(sessions).toHaveLength(4);

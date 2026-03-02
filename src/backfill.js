@@ -1,4 +1,4 @@
-import { readdir, stat, readFile, writeFile, mkdir } from 'fs/promises';
+import { readdir, stat, readFile, writeFile, mkdir, open } from 'fs/promises';
 import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
@@ -10,12 +10,39 @@ const DEFAULT_MAX_SESSIONS = 50;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const PROCESSED_PATH = `${process.env.HOME}/.your-taste/processed.json`;
 
+// Sessions smaller than this are almost always junk (session starts without real interaction).
+// Viable sessions are typically 14KB+; junk (too few messages, too short) median 5-7KB.
+const MIN_FILE_SIZE = 10_000;
+
+// Signature to detect meta-sessions (taste init's own claude -p calls persisted as JSONL).
+// Checked against the first line of each file — cheap O(1) read, no full parse needed.
+const META_SESSION_SIGNATURE = 'You are a session analyst';
+
 /**
  * Convert a filesystem path to its Claude Code project directory name.
  * Claude Code uses the pattern: /Users/sen/ai/foo → -Users-sen-ai-foo
  */
 function toClaudeProjectDirName(fsPath) {
   return fsPath.replace(/\//g, '-');
+}
+
+/**
+ * Check if a session file is a meta-session (from taste init's own claude -p calls).
+ * Reads only the first line — O(1) regardless of file size.
+ */
+async function isMetaSession(filePath) {
+  let fh;
+  try {
+    fh = await open(filePath, 'r');
+    const buf = Buffer.alloc(512);
+    const { bytesRead } = await fh.read(buf, 0, 512, 0);
+    const firstLine = buf.toString('utf8', 0, bytesRead).split('\n')[0];
+    return firstLine.includes(META_SESSION_SIGNATURE);
+  } catch {
+    return false;
+  } finally {
+    await fh?.close();
+  }
 }
 
 /**
@@ -54,7 +81,8 @@ export async function discoverSessions(projectsDir, filter = {}, currentProjectP
       if (!entry.endsWith('.jsonl')) continue;
       const fullPath = join(projectPath, entry);
       const fileStat = await stat(fullPath).catch(() => null);
-      if (!fileStat) continue;
+      if (!fileStat || fileStat.size < (filter.minSize ?? MIN_FILE_SIZE)) continue;
+      if (await isMetaSession(fullPath)) continue;
       sessions.push({ path: fullPath, mtime: fileStat.mtimeMs, isCurrentProject });
     }
   }
