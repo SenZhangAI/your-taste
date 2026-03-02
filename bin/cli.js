@@ -4,6 +4,7 @@ import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 import { readPending, removePendingRules } from '../src/pending.js';
 import { readTasteFile, appendRules } from '../src/taste-file.js';
+import { readObservations } from '../src/observations.js';
 import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
@@ -96,8 +97,8 @@ async function runInit() {
     onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
       if (a) { aborted = true; return; }
       if (phase === 'pass2') {
-        if (process.stdout.isTTY) process.stdout.write('\rSynthesizing profile...');
-        else console.log('Synthesizing profile...');
+        if (process.stdout.isTTY) process.stdout.write('\rSynthesizing observations...');
+        else console.log('Synthesizing observations...');
         return;
       }
       if (process.stdout.isTTY) {
@@ -127,22 +128,27 @@ async function runInit() {
     process.exit(0);
   }
 
-  console.log(`Profile built from ${result.extracted} sessions (${result.skipped} skipped):\n`);
+  console.log(`Analysis complete: ${result.extracted} sessions analyzed (${result.skipped} skipped).\n`);
 
-  const dims = result.profile.dimensions;
-  for (const [key, dim] of Object.entries(dims)) {
-    if (dim.evidence_count === 0) continue;
-    const barLen = Math.round(dim.score * 10);
-    const bar = '\u2588'.repeat(barLen) + '\u2591'.repeat(10 - barLen);
-    const label = dim.score < 0.35 ? 'low' : dim.score > 0.65 ? 'high' : 'mid';
-    const name = key.padEnd(24);
-    console.log(`  ${name} ${bar}  ${dim.score.toFixed(2)}  ${label.padEnd(6)} (${dim.evidence_count} signals)`);
+  if (result.observations) {
+    console.log('Observations saved to ~/.your-taste/observations.md');
   }
 
-  console.log('\nProfile saved to ~/.your-taste/profile.yaml');
+  const tasteContent = await readTasteFile();
+  if (tasteContent) {
+    console.log('Behavioral rules: ~/.your-taste/taste.md');
+  }
 }
 
 async function runShow() {
+  const observations = await readObservations();
+  if (observations) {
+    console.log('Observations');
+    console.log('\u2550'.repeat(12) + '\n');
+    console.log(observations);
+    console.log('');
+  }
+
   const profile = await readProfile();
 
   console.log('Your Taste Profile');
