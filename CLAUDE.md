@@ -10,15 +10,29 @@ Understanding taste is one means. The full picture includes:
 - **Strategic context** (what the user is focused on, what was already decided)
 - **Thinking patterns** (how users reason, so AI can predict intent)
 
-## How to Apply Profiles
+## Architecture: Observations-Based Learning
 
-The profile captures DIRECTION (taste), not skill level. Two rules:
+### Data Flow
+1. **Session end** — analyzer extracts observations from conversation transcript
+2. **observations.md** — primary output. Contains:
+   - **Thinking Patterns** — how the user reasons (abstract-first, traces full paths, etc.)
+   - **Behavioral Patterns** — preferences with context conditions (e.g. "prefers X when doing Y")
+   - **Suggested Rules** — candidate rules awaiting user review
+3. **taste.md** — user-reviewed rules promoted from Suggested Rules via `taste review`
+4. **profile.yaml** — optional display data (dimension scores). Not used for session injection when observations exist.
+
+### Session Injection Priority
+1. **taste.md** (if exists) — user-confirmed rules, highest trust
+2. **observations.md patterns** — Thinking Patterns + Behavioral Patterns injected as learned context
+3. **profile.yaml dimensions** — legacy fallback only when neither taste.md nor observations exist
+
+### How to Apply Observations
+
+Observations capture DIRECTION and REASONING STYLE, not skill level. Two rules:
 
 1. **Match their direction** — if they prefer cautious approaches, favor gradual migrations. If they prefer minimal code, avoid over-abstraction.
 
 2. **Exceed their skill level** — always execute at professional best-practice quality. A "cautious" user gets expert-level caution (migration strategies, canary deploys), not amateur caution (try-catch everywhere).
-
-Only act on dimensions with confidence > 30%. For low-confidence dimensions, use professional judgment.
 
 ## Critical Design Constraint: Infer A, Not C
 
