@@ -91,7 +91,7 @@ Session starts → Load taste.md + goal.md + context.md → AI starts informed
 ### Prerequisites
 
 - [Claude Code](https://code.claude.com/) installed
-- `ANTHROPIC_API_KEY` environment variable set
+- An LLM provider configured (see [Providers](#providers) below)
 
 ### Install
 
@@ -150,6 +150,64 @@ Everything lives in `~/.your-taste/`:
 - `projects/<name>/context.md` — recent decisions, open questions, last session (auto-maintained)
 
 Set `YOUR_TASTE_DIR` to change the storage location.
+
+## Providers
+
+your-taste needs an LLM to analyze your sessions. Set an environment variable and it auto-detects, or configure explicitly in `~/.your-taste/config.yaml`.
+
+### Auto-detection (zero config)
+
+Set any of these env vars — first one found wins:
+
+| Priority | Provider | Env Variable | Default Model |
+|----------|----------|-------------|---------------|
+| 1 | Anthropic | `ANTHROPIC_API_KEY` | claude-haiku-4-5 |
+| 2 | OpenAI | `OPENAI_API_KEY` | gpt-4o-mini |
+| 3 | DeepSeek | `DEEPSEEK_API_KEY` | deepseek-chat |
+| 4 | Gemini | `GEMINI_API_KEY` | gemini-2.0-flash |
+| 5 | Groq | `GROQ_API_KEY` | llama-3.3-70b-versatile |
+| 6 | Mistral | `MISTRAL_API_KEY` | mistral-small-latest |
+| 7 | OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-haiku |
+
+### Explicit config
+
+Create `~/.your-taste/config.yaml`:
+
+```yaml
+provider: deepseek
+apiKey: sk-...
+# model: deepseek-chat    # optional, overrides default
+# baseUrl: https://...    # optional, overrides default
+```
+
+### Claude Max Proxy (use your subscription, no API key)
+
+If you have a Claude Max/Pro subscription but no API key, [claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) wraps your Claude Code CLI as a local OpenAI-compatible API:
+
+```bash
+git clone https://github.com/atalovesyou/claude-max-api-proxy.git
+cd claude-max-api-proxy && npm install && npm run build
+node dist/server/standalone.js  # runs on localhost:3456
+```
+
+Then configure:
+
+```yaml
+provider: claude-max-proxy
+# model: claude-sonnet-4   # or claude-opus-4, claude-haiku-4
+```
+
+### Ollama (local models)
+
+```yaml
+provider: ollama
+model: llama3.2
+# baseUrl: http://localhost:11434/v1   # default
+```
+
+### No provider?
+
+Outside Claude Code, your-taste falls back to `claude -p` (Claude Code CLI). Inside Claude Code, you need one of the above configured.
 
 ## Roadmap
 
