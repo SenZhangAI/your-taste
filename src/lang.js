@@ -88,6 +88,10 @@ const TEMPLATES = {
     contextDecisions: '## Recent Decisions',
     contextQuestions: '## Open Questions',
     contextLastSession: '## Last Session',
+    // observations.js
+    thinkingPatternsHeader: 'Thinking Patterns',
+    behavioralPatternsHeader: 'Behavioral Patterns',
+    suggestedRulesHeader: 'Suggested Rules',
   },
   zh: {
     tasteHeader: '# 你的品味',
@@ -106,6 +110,9 @@ const TEMPLATES = {
     contextDecisions: '## 近期决策',
     contextQuestions: '## 待解决问题',
     contextLastSession: '## 上次会话',
+    thinkingPatternsHeader: '思维模式',
+    behavioralPatternsHeader: '行为模式',
+    suggestedRulesHeader: '建议规则',
   },
   ja: {
     tasteHeader: '# あなたのテイスト',
@@ -124,6 +131,9 @@ const TEMPLATES = {
     contextDecisions: '## 最近の決定',
     contextQuestions: '## 未解決の質問',
     contextLastSession: '## 前回のセッション',
+    thinkingPatternsHeader: 'Thinking Patterns',
+    behavioralPatternsHeader: 'Behavioral Patterns',
+    suggestedRulesHeader: 'Suggested Rules',
   },
 };
 
