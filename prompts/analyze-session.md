@@ -32,6 +32,11 @@ Score each on 0.0-1.0 scale:
 
 {{DIMENSIONS}}
 
+## Language
+
+Write ALL text fields (evidence, summary, session_context, candidate_rules) in the SAME language as the conversation transcript. Do NOT translate — preserve the original language to avoid meaning distortion.
+Only enum/structural fields (dimension, direction, session_quality) stay in English.
+
 ## Preference Signal Instructions
 
 1. Find moments where the AI proposed something and the user reacted (accepted, modified, rejected, or requested something different)

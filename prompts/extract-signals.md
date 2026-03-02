@@ -44,6 +44,11 @@ Also extract strategic context if present:
 
 Keep entries concise (max 15 words). No code, no file paths.
 
+## Language
+
+Write ALL text fields (ai_proposed, user_reacted, principle, session_context) in the SAME language as the conversation transcript. Do NOT translate — preserve the original language to avoid meaning distortion.
+Only enum fields (strength, dimension, session_quality) and user_language stay in English.
+
 ## Output Format
 
 You MUST return ONLY a JSON object. No text before or after. No markdown fencing.
