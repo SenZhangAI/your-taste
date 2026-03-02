@@ -5,8 +5,8 @@ import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
 import { extractSignals, synthesizeProfile } from './analyzer.js';
-import { createDefaultProfile, updateProfile } from './profile.js';
-import { readPending, updatePending, getPendingRuleTexts } from './pending.js';
+import { readObservations, writeObservations } from './observations.js';
+import { readTasteFile } from './taste-file.js';
 import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from './signals.js';
 import { hasLangFile, writeLang } from './lang.js';
 import { META_MARKER } from './llm.js';
@@ -231,7 +231,7 @@ async function pass1Session(transcriptPath) {
  *
  * Pass 1: Per-session signal extraction → persisted to init-signals.jsonl
  *         Interruption-safe: resumes from where it left off.
- * Pass 2: Unified synthesis from all accumulated decision points → profile + pending
+ * Pass 2: Unified synthesis from all accumulated decision points → observations.md
  *
  * Sequential processing — each `claude -p` subprocess is heavy.
  * Fail-fast: aborts Pass 1 after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
@@ -301,13 +301,12 @@ export async function backfill(projectsDir, options = {}) {
     onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1 + pass1Resumed + skipCount });
   }
 
-  // --- Pass 2: Unified synthesis ---
+  // --- Pass 2: Unified synthesis → observations.md ---
   const { entries } = await readAllSignals();
   const decisionPoints = collectForSynthesis(entries);
 
   if (decisionPoints.length === 0) {
     debug('backfill: no decision points to synthesize');
-    // Still mark sessions as processed to avoid re-scanning
     for (const entry of entries) alreadyProcessed.add(entry.session);
     await saveProcessed(alreadyProcessed);
     await clearSignals();
@@ -318,18 +317,17 @@ export async function backfill(projectsDir, options = {}) {
   onProgress?.({ phase: 'pass2', total: total + skipCount });
 
   try {
-    const pending = await readPending();
-    const pendingTexts = getPendingRuleTexts(pending);
-    const { signals, rules, insights } = await synthesizeProfile(decisionPoints, pendingTexts);
+    const existingObservations = await readObservations();
+    const tasteContent = await readTasteFile();
+    const tasteRules = tasteContent
+      ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
+      : [];
 
-    debug(`backfill: Pass 2 done — ${signals.length} signals, ${rules.length} rules, ${insights.length} insights`);
+    const observationsMarkdown = await synthesizeProfile(decisionPoints, existingObservations, tasteRules);
 
-    const profile = createDefaultProfile();
-    if (signals.length > 0) await updateProfile(profile, signals);
-
-    if (rules.length > 0) {
-      await updatePending(pending, rules);
-      debug(`backfill: stored ${rules.length} rules in pending`);
+    if (observationsMarkdown) {
+      await writeObservations(observationsMarkdown);
+      debug(`backfill: wrote observations.md (${observationsMarkdown.length} chars)`);
     }
 
     // Mark all sessions as fully processed and clean up
@@ -337,10 +335,9 @@ export async function backfill(projectsDir, options = {}) {
     await saveProcessed(alreadyProcessed);
     await clearSignals();
 
-    return { profile, extracted, skipped: skipped + skipCount, total: total + skipCount, insights };
+    return { observations: observationsMarkdown, extracted, skipped: skipped + skipCount, total: total + skipCount };
   } catch (err) {
     debug(`backfill: Pass 2 FAILED — ${err.message}`);
-    // Don't clear signals — Pass 1 work is preserved for retry
     return null;
   }
 }
