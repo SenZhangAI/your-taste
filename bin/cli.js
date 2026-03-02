@@ -91,35 +91,43 @@ async function runInit() {
   let lastLog = 0;
   let aborted = false;
 
-  const result = await backfill(PROJECTS_DIR, {
-    filter,
-    currentProjectPath: process.cwd(),
-    onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
-      if (a) { aborted = true; return; }
-      if (phase === 'pass2') {
-        if (process.stdout.isTTY) process.stdout.write('\rSynthesizing observations...');
-        else console.log('Synthesizing observations...');
-        return;
-      }
-      if (process.stdout.isTTY) {
-        const pct = Math.round((current / total) * 100);
-        const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
-        process.stdout.write(`\rScanning sessions... ${bar} ${current}/${total}`);
-      } else {
-        const pct = Math.round((current / total) * 100);
-        const bucket = Math.floor(pct / 10) * 10;
-        if (bucket > lastLog || current === total) {
-          lastLog = bucket;
-          console.log(`Scanning sessions... ${current}/${total} (${pct}%)`);
+  let result;
+  try {
+    result = await backfill(PROJECTS_DIR, {
+      filter,
+      currentProjectPath: process.cwd(),
+      onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
+        if (a) { aborted = true; return; }
+        if (phase === 'pass2') {
+          if (process.stdout.isTTY) process.stdout.write('\rSynthesizing observations...');
+          else console.log('Synthesizing observations...');
+          return;
         }
-      }
-    },
-  });
+        if (process.stdout.isTTY) {
+          const pct = Math.round((current / total) * 100);
+          const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
+          process.stdout.write(`\rScanning sessions... ${bar} ${current}/${total}`);
+        } else {
+          const pct = Math.round((current / total) * 100);
+          const bucket = Math.floor(pct / 10) * 10;
+          if (bucket > lastLog || current === total) {
+            lastLog = bucket;
+            console.log(`Scanning sessions... ${current}/${total} (${pct}%)`);
+          }
+        }
+      },
+    });
+  } catch (err) {
+    console.log('');
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
 
   console.log('');
 
   if (aborted) {
-    console.log('Aborted: multiple consecutive LLM failures. Run `taste debug log` for details.');
+    console.log('Aborted: some LLM calls failed, but partial results were saved.');
+    console.log('Run `taste debug log` for details.\n');
   }
 
   if (!result) {

@@ -306,6 +306,11 @@ export async function backfill(projectsDir, options = {}) {
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         debug(`backfill: aborting Pass 1 — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
         onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1, aborted: true });
+        // If no sessions were ever successfully extracted, this is a configuration error
+        // (wrong API key, no provider, etc.) — surface it instead of silently returning null.
+        if (extracted === 0) {
+          throw new Error(err.message);
+        }
         break;
       }
     }
