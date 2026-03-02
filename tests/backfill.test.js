@@ -48,6 +48,33 @@ describe('backfill session discovery', () => {
     expect(sessions).toHaveLength(3);
   });
 
+  it('noCap bypasses maxSessions default cap', async () => {
+    for (let i = 0; i < 5; i++) {
+      await writeFile(`${TEST_PROJECTS}/project-a/session${i}.jsonl`, VALID_SESSION);
+    }
+    // maxSessions: 3 caps at 3
+    const capped = await discoverSessions(TEST_PROJECTS, { maxSessions: 3, minSize: 0 });
+    expect(capped).toHaveLength(3);
+
+    // noCap returns all despite maxSessions
+    const all = await discoverSessions(TEST_PROJECTS, { maxSessions: 3, noCap: true, minSize: 0 });
+    expect(all).toHaveLength(5);
+  });
+
+  it('noCap preserves days filter', async () => {
+    const fresh = `${TEST_PROJECTS}/project-a/fresh.jsonl`;
+    const stale = `${TEST_PROJECTS}/project-a/stale.jsonl`;
+    await writeFile(fresh, VALID_SESSION);
+    await writeFile(stale, VALID_SESSION);
+
+    const past = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    await utimes(stale, past, past);
+
+    const sessions = await discoverSessions(TEST_PROJECTS, { days: 30, noCap: true, minSize: 0 });
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toContain('fresh.jsonl');
+  });
+
   it('filters by days', async () => {
     const fresh = `${TEST_PROJECTS}/project-a/fresh.jsonl`;
     const stale = `${TEST_PROJECTS}/project-a/stale.jsonl`;

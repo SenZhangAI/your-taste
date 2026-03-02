@@ -159,9 +159,12 @@ export async function discoverSessions(projectsDir, filter = {}, currentProjectP
       filtered = filtered.filter(s => s.mtime >= cutoff);
     }
 
-    // Apply max sessions cap (default 50)
-    const max = filter.maxSessions || DEFAULT_MAX_SESSIONS;
-    filtered = filtered.slice(0, max);
+    // Apply max sessions cap (default 50) — skipped when noCap is set,
+    // allowing callers to apply the cap after their own filtering (e.g. processed sessions).
+    if (!filter.noCap) {
+      const max = filter.maxSessions || DEFAULT_MAX_SESSIONS;
+      filtered = filtered.slice(0, max);
+    }
   }
 
   const currentCount = filtered.filter(s => s.isCurrentProject).length;
@@ -243,11 +246,16 @@ async function pass1Session(transcriptPath) {
 export async function backfill(projectsDir, options = {}) {
   const { onProgress, filter, currentProjectPath } = options;
 
-  const sessionPaths = await discoverSessions(projectsDir, filter, currentProjectPath);
+  // Discover all candidates (noCap) so the session cap applies AFTER filtering out
+  // already-processed sessions. Without this, repeated runs stall: the same N newest
+  // sessions are discovered every time, all already processed, leaving older unprocessed
+  // sessions permanently unreachable.
+  const sessionPaths = await discoverSessions(projectsDir, { ...filter, noCap: true }, currentProjectPath);
 
-  // Skip fully-processed sessions (completed both passes in a previous run)
+  // Skip fully-processed sessions, then apply the per-run cap
   const alreadyProcessed = await loadProcessed();
-  const toProcess = sessionPaths.filter(p => !alreadyProcessed.has(p));
+  const maxSessions = filter?.all ? sessionPaths.length : (filter?.maxSessions || DEFAULT_MAX_SESSIONS);
+  const toProcess = sessionPaths.filter(p => !alreadyProcessed.has(p)).slice(0, maxSessions);
   const skipCount = sessionPaths.length - toProcess.length;
   if (skipCount > 0) debug(`backfill: skipping ${skipCount} fully-processed sessions`);
 
