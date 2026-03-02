@@ -60,7 +60,8 @@ You MUST return ONLY a JSON object. No text before or after. No markdown fencing
       "user_reacted": "Just pick the best one, don't list options",
       "strength": "correction",
       "dimension": "communication_style",
-      "principle": "AI should recommend one best approach, not present menus"
+      "principle": "AI should recommend one best approach, not present menus",
+      "conditions": null
     }
   ],
   "session_context": {
@@ -78,6 +79,10 @@ Fields:
 - **strength**: "correction" | "rejection" | "active_request" | "pushback"
 - **dimension**: Which preference dimension this maps to ({{DIMENSION_NAMES}})
 - **principle**: The underlying preference principle (A-level, not C-level). Short actionable statement.
+- **conditions**: (OPTIONAL) When this preference depends on context, describe the conditions.
+  Format: "context A → behavior A; context B → behavior B"
+  Only include when the user explicitly shows different preferences in different contexts.
+  Omit or set null for unconditional preferences.
 
 - **user_language**: ISO 639-1 code of the language the HUMAN (not AI) primarily uses in the transcript (e.g., "zh", "en", "ja")
 

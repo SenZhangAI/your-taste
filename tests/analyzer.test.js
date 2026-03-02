@@ -247,6 +247,41 @@ describe('Pass 1: parseExtractResponse', () => {
     const result = parseExtractResponse(json);
     expect(result.decisionPoints[0].dimension).toBeNull();
   });
+
+  it('preserves optional conditions field', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        {
+          ai_proposed: 'Proposed full schema replacement',
+          user_reacted: 'Depends on context — new project yes, production no',
+          strength: 'correction',
+          dimension: 'risk_tolerance',
+          principle: 'Minimize total migration risk',
+          conditions: 'New project → clean break; production system → gradual migration',
+        },
+      ],
+      session_quality: 'high',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints[0].conditions).toBe('New project → clean break; production system → gradual migration');
+  });
+
+  it('defaults conditions to null when absent', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        {
+          ai_proposed: 'Listed 3 options',
+          user_reacted: 'Just pick one',
+          strength: 'correction',
+          dimension: 'communication_style',
+          principle: 'Recommend one approach',
+        },
+      ],
+      session_quality: 'high',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints[0].conditions).toBeNull();
+  });
 });
 
 describe('Pass 2: parseSynthesisResponse', () => {

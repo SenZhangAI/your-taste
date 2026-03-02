@@ -151,6 +151,8 @@ export function parseExtractResponse(text) {
         strength: VALID_STRENGTHS.has(dp.strength) ? dp.strength : 'correction',
         dimension: DIMENSION_NAMES.includes(dp.dimension) ? dp.dimension : null,
         principle: dp.principle.trim(),
+        conditions: typeof dp.conditions === 'string' && dp.conditions.trim().length > 0
+          ? dp.conditions.trim() : null,
       }));
 
     const context = validateContext(result.session_context);
