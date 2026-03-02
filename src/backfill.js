@@ -16,6 +16,10 @@ const DEFAULT_MAX_SESSIONS = 50;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const PROCESSED_PATH = `${process.env.HOME}/.your-taste/processed.json`;
 
+function isTimeoutError(err) {
+  return /timed? ?out|timeout|504/i.test(err.message);
+}
+
 // Sessions smaller than this are almost always junk (session starts without real interaction).
 // Viable sessions are typically 14KB+; junk (too few messages, too short) median 5-7KB.
 const MIN_FILE_SIZE = 10_000;
@@ -313,31 +317,46 @@ export async function backfill(projectsDir, options = {}) {
     return null;
   }
 
-  debug(`backfill: Pass 2 — synthesizing ${decisionPoints.length} decision points from ${entries.length} sessions`);
   onProgress?.({ phase: 'pass2', total: total + skipCount });
 
-  try {
-    const existingObservations = await readObservations();
-    const tasteContent = await readTasteFile();
-    const tasteRules = tasteContent
-      ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
-      : [];
+  const existingObservations = await readObservations();
+  const tasteContent = await readTasteFile();
+  const tasteRules = tasteContent
+    ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
+    : [];
 
-    const observationsMarkdown = await synthesizeProfile(decisionPoints, existingObservations, tasteRules);
+  // Retry with fewer decision points on timeout — strongest signals are sorted first,
+  // so halving always preserves the highest-value data.
+  const MIN_DPS_FOR_RETRY = 5;
+  let dpsToUse = decisionPoints;
+  let observationsMarkdown = null;
 
-    if (observationsMarkdown) {
-      await writeObservations(observationsMarkdown);
-      debug(`backfill: wrote observations.md (${observationsMarkdown.length} chars)`);
+  while (dpsToUse.length >= MIN_DPS_FOR_RETRY) {
+    debug(`backfill: Pass 2 — synthesizing ${dpsToUse.length} decision points from ${entries.length} sessions`);
+    try {
+      observationsMarkdown = await synthesizeProfile(dpsToUse, existingObservations, tasteRules);
+      break;
+    } catch (err) {
+      if (!isTimeoutError(err) || dpsToUse.length <= MIN_DPS_FOR_RETRY) {
+        debug(`backfill: Pass 2 FAILED — ${err.message}`);
+        return null;
+      }
+      const reduced = Math.max(MIN_DPS_FOR_RETRY, Math.floor(dpsToUse.length / 2));
+      debug(`backfill: Pass 2 timed out with ${dpsToUse.length} DPs, retrying with ${reduced}`);
+      onProgress?.({ phase: 'pass2', total: total + skipCount, retrying: reduced });
+      dpsToUse = decisionPoints.slice(0, reduced);
     }
-
-    // Mark all sessions as fully processed and clean up
-    for (const entry of entries) alreadyProcessed.add(entry.session);
-    await saveProcessed(alreadyProcessed);
-    await clearSignals();
-
-    return { observations: observationsMarkdown, extracted, skipped: skipped + skipCount, total: total + skipCount };
-  } catch (err) {
-    debug(`backfill: Pass 2 FAILED — ${err.message}`);
-    return null;
   }
+
+  if (observationsMarkdown) {
+    await writeObservations(observationsMarkdown);
+    debug(`backfill: wrote observations.md (${observationsMarkdown.length} chars)`);
+  }
+
+  // Mark all sessions as fully processed and clean up
+  for (const entry of entries) alreadyProcessed.add(entry.session);
+  await saveProcessed(alreadyProcessed);
+  await clearSignals();
+
+  return { observations: observationsMarkdown, extracted, skipped: skipped + skipCount, total: total + skipCount };
 }
