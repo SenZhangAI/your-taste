@@ -1,6 +1,7 @@
 import { readFile } from 'fs/promises';
 import { complete } from './llm.js';
 import { DIMENSIONS } from './dimensions.js';
+import { debug } from './debug.js';
 
 export async function analyzeTranscript(conversationText, pendingRuleTexts = []) {
   const promptTemplate = await readFile(
@@ -23,8 +24,12 @@ export async function analyzeTranscript(conversationText, pendingRuleTexts = [])
     .replace('{{PENDING_RULES}}', pendingSection)
     .replace('{{TRANSCRIPT}}', conversationText);
 
+  debug(`analyzer: sending prompt (${prompt.length} chars) to LLM`);
   const response = await complete(prompt);
-  return parseAnalysisResponse(response);
+  debug(`analyzer: raw response (${response.length} chars): ${response.slice(0, 500)}${response.length > 500 ? '...' : ''}`);
+  const parsed = parseAnalysisResponse(response);
+  debug(`analyzer: parsed ${parsed.signals.length} signals, ${parsed.rules.length} rules, context=${parsed.context ? 'yes' : 'null'}`);
+  return parsed;
 }
 
 function validateContext(raw) {

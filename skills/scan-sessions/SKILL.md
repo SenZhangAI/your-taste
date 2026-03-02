@@ -22,4 +22,8 @@ Scan past Claude Code sessions to build a preference profile.
 
 3. Run the command **in the background** (use run_in_background).
 
-4. When the background task completes and you are notified, show the user the results summary. If successful, tell them their profile has been built and will be automatically applied on their next session start.
+4. When the background task completes and you are notified, present the results with an encouraging tone:
+   - **Lead with what was learned**, not what's missing. Frame each discovered dimension as a concrete insight about the user's working style (e.g., "You prefer high autonomy — act first, confirm later" rather than just showing a number).
+   - **First scan is a meaningful start.** Even 2-3 signals are valuable — the system now understands enough to start adapting. Frame it as "your-taste now knows X about you" not "only X signals found."
+   - **Undiscovered dimensions are opportunities**, not gaps. "As we work together more, your-taste will pick up on your risk tolerance and quality standards too" — forward-looking, not deficit-focused.
+   - Tell them the profile will be automatically applied on their next session start.
