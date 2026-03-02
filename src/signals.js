@@ -49,11 +49,12 @@ export async function readAllSignals() {
 }
 
 /**
- * Collect all decision points into a flat array, sorted by strength.
- * Applies the accumulation cap to prevent Pass 2 overflow.
+ * Collect all decision points into a flat array, filter low-quality entries,
+ * sort by strength, and cap to prevent Pass 2 prompt overflow.
  */
 const STRENGTH_ORDER = { rejection: 0, pushback: 1, correction: 2, active_request: 3 };
-const MAX_SIGNALS_FOR_SYNTHESIS = 40;
+const MAX_SIGNALS_FOR_SYNTHESIS = 25;
+const MIN_PRINCIPLE_LENGTH = 15;
 
 export function collectForSynthesis(entries) {
   const all = [];
@@ -63,14 +64,21 @@ export function collectForSynthesis(entries) {
     }
   }
 
-  // Sort by strength (strongest first)
-  all.sort((a, b) => (STRENGTH_ORDER[a.strength] ?? 9) - (STRENGTH_ORDER[b.strength] ?? 9));
-
-  if (all.length > MAX_SIGNALS_FOR_SYNTHESIS) {
-    debug(`signals: capping ${all.length} → ${MAX_SIGNALS_FOR_SYNTHESIS} for synthesis`);
-    return all.slice(0, MAX_SIGNALS_FOR_SYNTHESIS);
+  // Quality filter: drop decision points with vague/too-short principles
+  const before = all.length;
+  const filtered = all.filter(dp => dp.principle && dp.principle.length >= MIN_PRINCIPLE_LENGTH);
+  if (filtered.length < before) {
+    debug(`signals: filtered ${before - filtered.length} low-quality DPs (principle < ${MIN_PRINCIPLE_LENGTH} chars)`);
   }
-  return all;
+
+  // Sort by strength (strongest first)
+  filtered.sort((a, b) => (STRENGTH_ORDER[a.strength] ?? 9) - (STRENGTH_ORDER[b.strength] ?? 9));
+
+  if (filtered.length > MAX_SIGNALS_FOR_SYNTHESIS) {
+    debug(`signals: capping ${filtered.length} → ${MAX_SIGNALS_FOR_SYNTHESIS} for synthesis`);
+    return filtered.slice(0, MAX_SIGNALS_FOR_SYNTHESIS);
+  }
+  return filtered;
 }
 
 /**

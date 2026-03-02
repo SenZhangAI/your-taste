@@ -52,13 +52,13 @@ describe('signals intermediate storage', () => {
         user_reacted: `reaction ${i}-${j}`,
         strength: j < 2 ? 'rejection' : 'correction',
         dimension: 'risk_tolerance',
-        principle: `principle ${i}-${j}`,
+        principle: `User prefers approach ${i}-${j} over alternatives`,
       }));
       entries.push({ session: `/s${i}.jsonl`, decision_points: dps });
     }
 
     const result = collectForSynthesis(entries);
-    expect(result.length).toBe(40); // capped
+    expect(result.length).toBe(25); // capped
     // Rejections should sort before corrections
     expect(result[0].strength).toBe('rejection');
   });
@@ -66,10 +66,22 @@ describe('signals intermediate storage', () => {
   it('collectForSynthesis preserves all when under cap', () => {
     const entries = [
       { session: '/s.jsonl', decision_points: [
-        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'risk_tolerance', principle: 'p' },
+        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'risk_tolerance', principle: 'Direct execution over exploratory searching' },
       ]},
     ];
     const result = collectForSynthesis(entries);
     expect(result).toHaveLength(1);
+  });
+
+  it('collectForSynthesis filters out short principles', () => {
+    const entries = [
+      { session: '/s.jsonl', decision_points: [
+        { strength: 'correction', dimension: 'risk_tolerance', principle: 'too short' },
+        { strength: 'rejection', dimension: 'risk_tolerance', principle: 'This is a meaningful principle about user behavior' },
+      ]},
+    ];
+    const result = collectForSynthesis(entries);
+    expect(result).toHaveLength(1);
+    expect(result[0].strength).toBe('rejection');
   });
 });
