@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
+import { readLang, getTemplates } from './lang.js';
 
 export async function loadGoal(projectDir) {
   try {
@@ -15,20 +16,22 @@ export function renderGoalForInjection(goalContent) {
   return goalContent;
 }
 
-const GOAL_TEMPLATE = `# Project Goal
+function buildGoalTemplate(t) {
+  return `${t.goalHeader}
 
-## What
-<!-- What is this project? One-sentence description. -->
+${t.goalWhat}
+<!-- ${t.goalWhatDesc} -->
 
-## Constraints
-<!-- Technical constraints, business requirements, non-negotiable rules. -->
+${t.goalConstraints}
+<!-- ${t.goalConstraintsDesc} -->
 
-## Architecture Decisions
-<!-- Key decisions and WHY they were made. -->
+${t.goalArchDecisions}
+<!-- ${t.goalArchDesc} -->
 
-## Rejected Approaches
-<!-- What was considered and rejected, and why. Prevents re-exploring dead ends. -->
+${t.goalRejected}
+<!-- ${t.goalRejectedDesc} -->
 `;
+}
 
 export async function createGoalTemplate(projectDir) {
   const goalPath = join(projectDir, 'goal.md');
@@ -36,8 +39,9 @@ export async function createGoalTemplate(projectDir) {
     await readFile(goalPath, 'utf8');
     return { path: goalPath, created: false };
   } catch {
+    const t = getTemplates(await readLang());
     await mkdir(dirname(goalPath), { recursive: true });
-    await writeFile(goalPath, GOAL_TEMPLATE, 'utf8');
+    await writeFile(goalPath, buildGoalTemplate(t), 'utf8');
     return { path: goalPath, created: true };
   }
 }

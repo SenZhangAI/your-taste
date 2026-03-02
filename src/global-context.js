@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { readLang, getTemplates } from './lang.js';
 
 const MAX_FOCUS = 5;
 const FOCUS_TTL_DAYS = 30;
@@ -26,8 +27,8 @@ function parseGlobalContextMd(content) {
   return { focus };
 }
 
-function renderGlobalContextMd(ctx) {
-  const lines = ['# Cross-Project Focus', ''];
+function renderGlobalContextMd(ctx, t) {
+  const lines = [t.globalContextHeader, ''];
   for (const f of ctx.focus) {
     lines.push(`- [${f.date}] ${f.text}`);
   }
@@ -53,8 +54,9 @@ export async function updateGlobalContext(topics) {
     .map(t => ({ date: today, text: t }));
   ctx.focus = [...newItems, ...ctx.focus].slice(0, MAX_FOCUS);
 
+  const t = getTemplates(await readLang());
   await mkdir(getDir(), { recursive: true });
-  await writeFile(getPath(), renderGlobalContextMd(ctx), 'utf8');
+  await writeFile(getPath(), renderGlobalContextMd(ctx, t), 'utf8');
   return ctx;
 }
 
@@ -65,13 +67,16 @@ export async function pruneGlobalContext() {
     const age = (now - new Date(f.date).getTime()) / (1000 * 60 * 60 * 24);
     return age <= FOCUS_TTL_DAYS;
   });
+
+  const t = getTemplates(await readLang());
   await mkdir(getDir(), { recursive: true });
-  await writeFile(getPath(), renderGlobalContextMd(ctx), 'utf8');
+  await writeFile(getPath(), renderGlobalContextMd(ctx, t), 'utf8');
   return ctx;
 }
 
-export function renderGlobalContext(ctx) {
+export async function renderGlobalContext(ctx) {
   if (ctx.focus.length === 0) return null;
+  const t = getTemplates(await readLang());
   const items = ctx.focus.map(f => `- ${f.text}`).join('\n');
-  return `### Cross-Project Focus\n${items}`;
+  return `${t.globalContextInjection}\n${items}`;
 }

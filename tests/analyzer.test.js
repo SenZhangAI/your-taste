@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAnalysisResponse } from '../src/analyzer.js';
+import { parseAnalysisResponse, parseExtractResponse, parseSynthesisResponse } from '../src/analyzer.js';
 
 describe('analyzer response parsing', () => {
   it('parses signals and candidate_rules from response', () => {
@@ -7,12 +7,16 @@ describe('analyzer response parsing', () => {
       signals: [
         { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'test', summary: 'test' }
       ],
-      candidate_rules: ['Clean breaks over gradual migration'],
+      candidate_rules: [
+        { text: 'Clean breaks over gradual migration', evidence: 'Chose rewrite over incremental refactoring' }
+      ],
       session_quality: 'high',
     });
     const result = parseAnalysisResponse(json);
     expect(result.signals).toHaveLength(1);
-    expect(result.rules).toEqual(['Clean breaks over gradual migration']);
+    expect(result.rules).toEqual([
+      { text: 'Clean breaks over gradual migration', evidence: 'Chose rewrite over incremental refactoring' }
+    ]);
   });
 
   it('returns empty rules when candidate_rules is missing', () => {
@@ -55,14 +59,36 @@ describe('analyzer response parsing', () => {
     expect(result.signals).toHaveLength(1);
   });
 
-  it('filters non-string rules', () => {
+  it('parses legacy string rules for backward compatibility', () => {
     const json = JSON.stringify({
       signals: [],
-      candidate_rules: ['Valid rule', 123, null, '', 'Another valid'],
+      candidate_rules: ['Valid rule', 'Another valid'],
       session_quality: 'medium',
     });
     const result = parseAnalysisResponse(json);
-    expect(result.rules).toEqual(['Valid rule', 'Another valid']);
+    expect(result.rules).toEqual([
+      { text: 'Valid rule', evidence: null },
+      { text: 'Another valid', evidence: null },
+    ]);
+  });
+
+  it('filters invalid rules', () => {
+    const json = JSON.stringify({
+      signals: [],
+      candidate_rules: [
+        { text: 'Valid', evidence: 'some evidence' },
+        123,
+        null,
+        { text: '', evidence: 'empty text' },
+        { noText: true },
+        'Legacy string',
+      ],
+      session_quality: 'medium',
+    });
+    const result = parseAnalysisResponse(json);
+    expect(result.rules).toHaveLength(2);
+    expect(result.rules[0]).toEqual({ text: 'Valid', evidence: 'some evidence' });
+    expect(result.rules[1]).toEqual({ text: 'Legacy string', evidence: null });
   });
 
   it('parses session_context when present', () => {
@@ -156,5 +182,109 @@ describe('analyzer response parsing', () => {
     });
     const result = parseAnalysisResponse(json);
     expect(result.context).toBeNull();
+  });
+});
+
+describe('Pass 1: parseExtractResponse', () => {
+  it('parses decision points with all fields', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        {
+          ai_proposed: 'Listed 3 options',
+          user_reacted: 'Just pick one',
+          strength: 'correction',
+          dimension: 'communication_style',
+          principle: 'Recommend one approach, not menus',
+        },
+      ],
+      session_context: { topics: ['auth redesign'], decisions: [], open_questions: [] },
+      session_quality: 'high',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints).toHaveLength(1);
+    expect(result.decisionPoints[0].strength).toBe('correction');
+    expect(result.decisionPoints[0].dimension).toBe('communication_style');
+    expect(result.context.topics).toEqual(['auth redesign']);
+  });
+
+  it('returns empty for malformed JSON', () => {
+    const result = parseExtractResponse('not json');
+    expect(result.decisionPoints).toEqual([]);
+    expect(result.context).toBeNull();
+  });
+
+  it('filters decision points missing required fields', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        { ai_proposed: 'good', user_reacted: 'good', strength: 'correction', dimension: 'risk_tolerance', principle: 'valid' },
+        { ai_proposed: 'missing principle', user_reacted: 'test', strength: 'correction', dimension: 'risk_tolerance' },
+        { ai_proposed: 'empty principle', user_reacted: 'test', strength: 'correction', dimension: 'risk_tolerance', principle: '' },
+        null,
+        123,
+      ],
+      session_quality: 'medium',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints).toHaveLength(1);
+  });
+
+  it('defaults invalid strength to correction', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        { ai_proposed: 'a', user_reacted: 'b', strength: 'unknown_type', dimension: 'risk_tolerance', principle: 'test' },
+      ],
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints[0].strength).toBe('correction');
+  });
+
+  it('nulls invalid dimension', () => {
+    const json = JSON.stringify({
+      decision_points: [
+        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'nonexistent', principle: 'test' },
+      ],
+    });
+    const result = parseExtractResponse(json);
+    expect(result.decisionPoints[0].dimension).toBeNull();
+  });
+});
+
+describe('Pass 2: parseSynthesisResponse', () => {
+  it('parses signals, rules, and insights', () => {
+    const json = JSON.stringify({
+      signals: [
+        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'cross-session evidence', summary: 'test' },
+      ],
+      candidate_rules: [
+        { text: 'X over Y', evidence: 'seen in 3 sessions', confidence: 'high' },
+      ],
+      pattern_insights: ['Strong pattern: user values autonomy'],
+    });
+    const result = parseSynthesisResponse(json);
+    expect(result.signals).toHaveLength(1);
+    expect(result.rules).toHaveLength(1);
+    expect(result.rules[0].confidence).toBe('high');
+    expect(result.insights).toHaveLength(1);
+  });
+
+  it('returns empty for malformed JSON', () => {
+    const result = parseSynthesisResponse('not json');
+    expect(result.signals).toEqual([]);
+    expect(result.rules).toEqual([]);
+    expect(result.insights).toEqual([]);
+  });
+
+  it('filters invalid signals and insights', () => {
+    const json = JSON.stringify({
+      signals: [
+        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'e', summary: 's' },
+        { dimension: 'nonexistent', score: 0.5 },
+      ],
+      candidate_rules: [],
+      pattern_insights: ['valid', 123, null, '', 'also valid'],
+    });
+    const result = parseSynthesisResponse(json);
+    expect(result.signals).toHaveLength(1);
+    expect(result.insights).toEqual(['valid', 'also valid']);
   });
 });

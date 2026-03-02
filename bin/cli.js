@@ -9,6 +9,7 @@ import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
 import { debug, isDebug, FLAG_PATH, LOG_PATH } from '../src/debug.js';
+import { readLang, writeLang, hasLangFile, languageName } from '../src/lang.js';
 import { writeFile, rm, mkdir, readFile as fsReadFile, stat as fsStat } from 'fs/promises';
 import { dirname } from 'path';
 
@@ -34,6 +35,8 @@ if (command === 'init') {
   await runStatus();
 } else if (command === 'goal') {
   await runGoal();
+} else if (command === 'lang') {
+  await runLang();
 } else if (command === 'debug') {
   await runDebug();
 } else {
@@ -48,6 +51,7 @@ if (command === 'init') {
   console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
+  console.log('  lang [code]       Show or set preferred language (zh, en, ja, ...)');
   console.log('  debug on|off|log  Toggle debug mode or view debug log');
   console.log('\nGlobal options:');
   console.log('  --debug           Show detailed debug output to stderr (this run only)');
@@ -89,18 +93,23 @@ async function runInit() {
   const result = await backfill(PROJECTS_DIR, {
     filter,
     currentProjectPath: process.cwd(),
-    onProgress({ processed, skipped, total, current, aborted: a }) {
+    onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
       if (a) { aborted = true; return; }
+      if (phase === 'pass2') {
+        if (process.stdout.isTTY) process.stdout.write('\rSynthesizing profile...');
+        else console.log('Synthesizing profile...');
+        return;
+      }
       if (process.stdout.isTTY) {
         const pct = Math.round((current / total) * 100);
         const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
-        process.stdout.write(`\rAnalyzing... ${bar} ${current}/${total}`);
+        process.stdout.write(`\rScanning sessions... ${bar} ${current}/${total}`);
       } else {
         const pct = Math.round((current / total) * 100);
         const bucket = Math.floor(pct / 10) * 10;
         if (bucket > lastLog || current === total) {
           lastLog = bucket;
-          console.log(`Analyzing... ${current}/${total} (${pct}%)`);
+          console.log(`Scanning sessions... ${current}/${total} (${pct}%)`);
         }
       }
     },
@@ -118,7 +127,7 @@ async function runInit() {
     process.exit(0);
   }
 
-  console.log(`Profile built from ${result.processed} sessions (${result.skipped} skipped):\n`);
+  console.log(`Profile built from ${result.extracted} sessions (${result.skipped} skipped):\n`);
 
   const dims = result.profile.dimensions;
   for (const [key, dim] of Object.entries(dims)) {
@@ -282,6 +291,22 @@ async function runGoal() {
   } else {
     console.log(`Goal file: ${path}`);
   }
+}
+
+async function runLang() {
+  const code = process.argv[3];
+  if (!code) {
+    const current = await readLang();
+    const hasFile = await hasLangFile();
+    if (hasFile) {
+      console.log(`Language: ${current} (${languageName(current)})`);
+    } else {
+      console.log(`Language: ${current} (default — run \`taste lang <code>\` to set)`);
+    }
+    return;
+  }
+  await writeLang(code);
+  console.log(`Language set to: ${code} (${languageName(code)})`);
 }
 
 async function runDebug() {

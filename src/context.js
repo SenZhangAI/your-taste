@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { readLang, getTemplates } from './lang.js';
 
 const MAX_DECISIONS = 10;
 const MAX_QUESTIONS = 5;
@@ -16,16 +17,21 @@ function parseContextMd(content) {
 
   const sections = content.split(/^## /m).slice(1); // split by ## headers
 
+  // Match section headers across languages using keyword patterns
+  const DECISION_PATTERN = /recent decisions|近期决策|最近の決定/i;
+  const QUESTION_PATTERN = /open questions|待解决问题|未解決の質問/i;
+  const SESSION_PATTERN = /last session|上次会话|前回のセッション/i;
+
   for (const section of sections) {
     const [header, ...bodyLines] = section.split('\n');
     const body = bodyLines.join('\n').trim();
-    const headerLower = header.trim().toLowerCase();
+    const h = header.trim();
 
-    if (headerLower.startsWith('recent decisions')) {
+    if (DECISION_PATTERN.test(h)) {
       ctx.decisions = parseListItems(body);
-    } else if (headerLower.startsWith('open questions')) {
+    } else if (QUESTION_PATTERN.test(h)) {
       ctx.open_questions = parseListItems(body);
-    } else if (headerLower.startsWith('last session')) {
+    } else if (SESSION_PATTERN.test(h)) {
       ctx.last_session = body || null;
     }
   }
@@ -63,11 +69,11 @@ function parseDateFlexible(dateStr) {
 
 // --- Markdown Writing ---
 
-function renderContextMd(ctx) {
-  const lines = ['# Project Context', ''];
+function renderContextMd(ctx, t) {
+  const lines = [t.contextHeader, ''];
 
   if (ctx.decisions.length > 0) {
-    lines.push('## Recent Decisions');
+    lines.push(t.contextDecisions);
     for (const d of ctx.decisions) {
       lines.push(`- [${d.date}] ${d.text}`);
     }
@@ -75,7 +81,7 @@ function renderContextMd(ctx) {
   }
 
   if (ctx.open_questions.length > 0) {
-    lines.push('## Open Questions');
+    lines.push(t.contextQuestions);
     for (const q of ctx.open_questions) {
       lines.push(`- ${q.text}`);
     }
@@ -83,7 +89,7 @@ function renderContextMd(ctx) {
   }
 
   if (ctx.last_session) {
-    lines.push('## Last Session');
+    lines.push(t.contextLastSession);
     lines.push(ctx.last_session);
     lines.push('');
   }
@@ -125,8 +131,9 @@ export async function updateProjectContext(projectDir, sessionContext) {
     ctx.last_session = `*${today}* — ${sessionContext.summary}`;
   }
 
+  const t = getTemplates(await readLang());
   await mkdir(projectDir, { recursive: true });
-  await writeFile(join(projectDir, 'context.md'), renderContextMd(ctx), 'utf8');
+  await writeFile(join(projectDir, 'context.md'), renderContextMd(ctx, t), 'utf8');
   return ctx;
 }
 

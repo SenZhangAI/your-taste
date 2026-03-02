@@ -2,8 +2,11 @@ import { readdir, stat, readFile, writeFile, mkdir, open } from 'fs/promises';
 import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
-import { analyzeTranscript } from './analyzer.js';
+import { extractSignals, synthesizeProfile } from './analyzer.js';
 import { createDefaultProfile, updateProfile } from './profile.js';
+import { readPending, updatePending, getPendingRuleTexts } from './pending.js';
+import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from './signals.js';
+import { hasLangFile, writeLang } from './lang.js';
 import { debug } from './debug.js';
 
 const DEFAULT_MAX_SESSIONS = 50;
@@ -137,102 +140,165 @@ async function saveProcessed(set) {
 // Conversation text beyond this is truncated (keep tail — recent interactions have richer signal)
 const MAX_CONVERSATION_CHARS = 30_000;
 
+// Also detect the new Pass 1 prompt signature
+const META_SESSION_SIGNATURES = ['You are a session analyst', 'You are a JSON-only signal extractor'];
+
 /**
- * Process a single session transcript through the analysis pipeline.
- * Returns { signals, context } or { signals: [] } if the session is too short.
+ * Prepare a session transcript for analysis.
+ * Returns filtered conversation text, or null if the session should be skipped.
  */
-export async function processSession(transcriptPath) {
-  debug(`session: processing ${transcriptPath}`);
-  const messages = await parseTranscript(transcriptPath);
-  if (messages.length < 4) {
-    debug(`session: skipped (${messages.length} messages < 4)`);
-    return { signals: [] };
-  }
+export function prepareConversation(messages) {
+  if (messages.length < 4) return null;
 
   let conversation = extractConversation(messages, { compact: true });
-  if (conversation.length < 200) {
-    debug(`session: skipped (conversation ${conversation.length} chars < 200)`);
-    return { signals: [] };
+  if (conversation.length < 200) return null;
+
+  // Skip meta-sessions
+  for (const sig of META_SESSION_SIGNATURES) {
+    if (conversation.includes(sig)) return null;
   }
 
-  // Skip meta-sessions: these are taste init's own claude -p calls persisted as session files
-  if (conversation.includes('You are a session analyst')) {
-    debug(`session: skipped (meta-session from previous taste init)`);
-    return { signals: [] };
-  }
-
-  // Safety net: truncate if still too long after compact extraction
   if (conversation.length > MAX_CONVERSATION_CHARS) {
-    debug(`session: truncating ${conversation.length} → ${MAX_CONVERSATION_CHARS} chars (keeping tail)`);
     conversation = '...(earlier conversation truncated)...\n\n' + conversation.slice(-MAX_CONVERSATION_CHARS);
   }
 
-  const filtered = filterSensitiveData(conversation);
-  debug(`session: analyzing ${filtered.length} chars (${messages.length} messages)`);
-  const { signals, context } = await analyzeTranscript(filtered);
-  debug(`session: done — ${signals.length} signals`);
-  return { signals, context };
+  return filterSensitiveData(conversation);
 }
 
 /**
- * Orchestrate full backfill: discover sessions, analyze one at a time, build profile.
+ * Pass 1: Extract decision points from a single session.
+ * Returns { decisionPoints, context } or null if session is not viable.
+ */
+async function pass1Session(transcriptPath) {
+  debug(`pass1: processing ${transcriptPath}`);
+  const messages = await parseTranscript(transcriptPath);
+  const conversation = prepareConversation(messages);
+  if (!conversation) {
+    debug(`pass1: skipped (not viable)`);
+    return null;
+  }
+
+  debug(`pass1: extracting signals from ${conversation.length} chars (${messages.length} messages)`);
+  const { decisionPoints, context, userLanguage } = await extractSignals(conversation);
+  debug(`pass1: done — ${decisionPoints.length} decision points${userLanguage ? `, lang=${userLanguage}` : ''}`);
+  return { decisionPoints, context, userLanguage };
+}
+
+/**
+ * Orchestrate full backfill with two-pass architecture.
  *
- * Sequential processing (no concurrency) — each `claude -p` subprocess is heavy.
- * Fail-fast: aborts after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
- * Tracks processed sessions to avoid re-analyzing on repeated runs.
+ * Pass 1: Per-session signal extraction → persisted to init-signals.jsonl
+ *         Interruption-safe: resumes from where it left off.
+ * Pass 2: Unified synthesis from all accumulated decision points → profile + pending
+ *
+ * Sequential processing — each `claude -p` subprocess is heavy.
+ * Fail-fast: aborts Pass 1 after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
  */
 export async function backfill(projectsDir, options = {}) {
   const { onProgress, filter, currentProjectPath } = options;
 
   const sessionPaths = await discoverSessions(projectsDir, filter, currentProjectPath);
 
-  // Skip already-processed sessions
+  // Skip fully-processed sessions (completed both passes in a previous run)
   const alreadyProcessed = await loadProcessed();
   const toProcess = sessionPaths.filter(p => !alreadyProcessed.has(p));
   const skipCount = sessionPaths.length - toProcess.length;
-  if (skipCount > 0) debug(`backfill: skipping ${skipCount} already-processed sessions`);
+  if (skipCount > 0) debug(`backfill: skipping ${skipCount} fully-processed sessions`);
+
+  // Check which sessions already completed Pass 1 (from an interrupted previous run)
+  const { sessions: pass1Done } = await readAllSignals();
+  const needPass1 = toProcess.filter(p => !pass1Done.has(p));
+  const pass1Resumed = toProcess.length - needPass1.length;
+  if (pass1Resumed > 0) debug(`backfill: resuming — ${pass1Resumed} sessions already have Pass 1 results`);
 
   const total = toProcess.length;
-  debug(`backfill: ${total} sessions to process (sequential)`);
+  debug(`backfill: ${needPass1.length} sessions need Pass 1, ${total} total for Pass 2`);
 
-  let processed = 0;
+  // --- Pass 1: Extract decision points per session ---
+  let extracted = pass1Resumed;
   let skipped = 0;
   let consecutiveFailures = 0;
-  const allSignals = [];
+  let langDetected = false;
 
-  for (let i = 0; i < total; i++) {
-    const sessionPath = toProcess[i];
+  for (let i = 0; i < needPass1.length; i++) {
+    const sessionPath = needPass1[i];
 
     try {
-      const result = await processSession(sessionPath);
-      if (result.signals.length > 0) {
-        allSignals.push(...result.signals);
-        processed++;
+      const result = await pass1Session(sessionPath);
+      if (result && result.decisionPoints.length > 0) {
+        await appendSignals(sessionPath, result.decisionPoints, result.context);
+        extracted++;
       } else {
+        // No decision points but session was processed — record to avoid re-processing
+        await appendSignals(sessionPath, [], result?.context || null);
         skipped++;
       }
+
+      // Auto-detect language from first session that reports one
+      if (!langDetected && result?.userLanguage) {
+        langDetected = true;
+        if (!(await hasLangFile())) {
+          await writeLang(result.userLanguage);
+          debug(`backfill: auto-detected language "${result.userLanguage}"`);
+        }
+      }
+
       consecutiveFailures = 0;
-      // Mark as processed (even if no signals — it was analyzed successfully)
-      alreadyProcessed.add(sessionPath);
-      await saveProcessed(alreadyProcessed);
     } catch (err) {
-      debug(`backfill: FAILED ${sessionPath} — ${err.message}`);
+      debug(`pass1: FAILED ${sessionPath} — ${err.message}`);
       skipped++;
       consecutiveFailures++;
 
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        debug(`backfill: aborting — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
-        onProgress?.({ processed, skipped, total: total + skipCount, current: i + 1, aborted: true });
+        debug(`backfill: aborting Pass 1 — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
+        onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1, aborted: true });
         break;
       }
     }
 
-    onProgress?.({ processed, skipped, total: total + skipCount, current: i + 1 + skipCount });
+    onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1 + pass1Resumed + skipCount });
   }
 
-  if (allSignals.length === 0) return null;
+  // --- Pass 2: Unified synthesis ---
+  const { entries } = await readAllSignals();
+  const decisionPoints = collectForSynthesis(entries);
 
-  const profile = createDefaultProfile();
-  await updateProfile(profile, allSignals);
-  return { profile, processed, skipped: skipped + skipCount, total: total + skipCount };
+  if (decisionPoints.length === 0) {
+    debug('backfill: no decision points to synthesize');
+    // Still mark sessions as processed to avoid re-scanning
+    for (const entry of entries) alreadyProcessed.add(entry.session);
+    await saveProcessed(alreadyProcessed);
+    await clearSignals();
+    return null;
+  }
+
+  debug(`backfill: Pass 2 — synthesizing ${decisionPoints.length} decision points from ${entries.length} sessions`);
+  onProgress?.({ phase: 'pass2', total: total + skipCount });
+
+  try {
+    const pending = await readPending();
+    const pendingTexts = getPendingRuleTexts(pending);
+    const { signals, rules, insights } = await synthesizeProfile(decisionPoints, pendingTexts);
+
+    debug(`backfill: Pass 2 done — ${signals.length} signals, ${rules.length} rules, ${insights.length} insights`);
+
+    const profile = createDefaultProfile();
+    if (signals.length > 0) await updateProfile(profile, signals);
+
+    if (rules.length > 0) {
+      await updatePending(pending, rules);
+      debug(`backfill: stored ${rules.length} rules in pending`);
+    }
+
+    // Mark all sessions as fully processed and clean up
+    for (const entry of entries) alreadyProcessed.add(entry.session);
+    await saveProcessed(alreadyProcessed);
+    await clearSignals();
+
+    return { profile, extracted, skipped: skipped + skipCount, total: total + skipCount, insights };
+  } catch (err) {
+    debug(`backfill: Pass 2 FAILED — ${err.message}`);
+    // Don't clear signals — Pass 1 work is preserved for retry
+    return null;
+  }
 }

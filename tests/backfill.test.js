@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, writeFile, rm, utimes } from 'fs/promises';
-import { discoverSessions } from '../src/backfill.js';
+import { discoverSessions, prepareConversation } from '../src/backfill.js';
 
 const TEST_PROJECTS = '/tmp/your-taste-test-projects';
 
@@ -121,5 +121,35 @@ describe('backfill session discovery', () => {
     const currentCount = sessions.filter(s => s.includes('-Users-me-myproj')).length;
     expect(currentCount).toBe(3);
     expect(sessions).toHaveLength(4);
+  });
+});
+
+describe('prepareConversation', () => {
+  it('returns null for too few messages', () => {
+    const result = prepareConversation([{ type: 'user', content: 'hi' }]);
+    expect(result).toBeNull();
+  });
+
+  it('returns null for meta-sessions', () => {
+    const messages = [
+      { type: 'user', content: 'You are a JSON-only signal extractor. Analyze this.' },
+      { type: 'assistant', content: '{"decision_points": []}' },
+      { type: 'user', content: 'next session' },
+      { type: 'assistant', content: '{"decision_points": []}' },
+    ];
+    const result = prepareConversation(messages);
+    expect(result).toBeNull();
+  });
+
+  it('returns conversation text for valid sessions', () => {
+    const messages = [
+      { type: 'user', content: 'Please refactor the authentication module to use JWT' },
+      { type: 'assistant', content: 'I will restructure the auth module with JWT tokens and refresh flow' },
+      { type: 'user', content: 'Good, but use httpOnly cookies for the refresh token, not localStorage' },
+      { type: 'assistant', content: 'Updated to use httpOnly cookies for refresh tokens for better security' },
+    ];
+    const result = prepareConversation(messages);
+    expect(result).toBeTruthy();
+    expect(result).toContain('refactor');
   });
 });

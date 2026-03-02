@@ -18,16 +18,19 @@ export async function readPending() {
   }
 }
 
-export async function updatePending(pending, newRuleTexts) {
+export async function updatePending(pending, newRules) {
   const today = new Date().toISOString().split('T')[0];
 
-  for (const text of newRuleTexts) {
+  for (const rule of newRules) {
+    const text = typeof rule === 'string' ? rule : rule.text;
+    const evidence = typeof rule === 'string' ? null : (rule.evidence || null);
     const existing = pending.rules.find(r => r.text === text);
     if (existing) {
       existing.count++;
       existing.last_seen = today;
+      if (evidence) existing.evidence = evidence;
     } else {
-      pending.rules.push({ text, count: 1, first_seen: today, last_seen: today });
+      pending.rules.push({ text, count: 1, first_seen: today, last_seen: today, evidence });
     }
   }
 
