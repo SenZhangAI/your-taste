@@ -127,6 +127,12 @@ export async function processSession(transcriptPath) {
     return { signals: [] };
   }
 
+  // Skip meta-sessions: these are taste init's own claude -p calls persisted as session files
+  if (conversation.includes('You are a session analyst')) {
+    debug(`session: skipped (meta-session from previous taste init)`);
+    return { signals: [] };
+  }
+
   // Safety net: truncate if still too long after compact extraction
   if (conversation.length > MAX_CONVERSATION_CHARS) {
     debug(`session: truncating ${conversation.length} → ${MAX_CONVERSATION_CHARS} chars (keeping tail)`);
