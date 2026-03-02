@@ -285,41 +285,41 @@ describe('Pass 1: parseExtractResponse', () => {
 });
 
 describe('Pass 2: parseSynthesisResponse', () => {
-  it('parses signals, rules, and insights', () => {
-    const json = JSON.stringify({
-      signals: [
-        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'cross-session evidence', summary: 'test' },
-      ],
-      candidate_rules: [
-        { text: 'X over Y', evidence: 'seen in 3 sessions', confidence: 'high' },
-      ],
-      pattern_insights: ['Strong pattern: user values autonomy'],
-    });
-    const result = parseSynthesisResponse(json);
-    expect(result.signals).toHaveLength(1);
-    expect(result.rules).toHaveLength(1);
-    expect(result.rules[0].confidence).toBe('high');
-    expect(result.insights).toHaveLength(1);
+  it('returns markdown string as-is', () => {
+    const markdown = `## Thinking Patterns
+
+- **A→B→C inference**: traces root cause. (5 sessions, high confidence)
+
+## Behavioral Patterns
+
+- **Migration strategy** (3 sessions)
+  Motivation: minimize risk
+  Evidence: chose clean break for new schema
+
+## Suggested Rules
+
+- "Act independently after plan confirmation"`;
+
+    const result = parseSynthesisResponse(markdown);
+    expect(result).toBe(markdown);
   });
 
-  it('returns empty for malformed JSON', () => {
-    const result = parseSynthesisResponse('not json');
-    expect(result.signals).toEqual([]);
-    expect(result.rules).toEqual([]);
-    expect(result.insights).toEqual([]);
+  it('strips markdown code fences if LLM wraps output', () => {
+    const inner = '## Thinking Patterns\n\n- **Test**: content';
+    const wrapped = '```markdown\n' + inner + '\n```';
+    const result = parseSynthesisResponse(wrapped);
+    expect(result).toBe(inner);
   });
 
-  it('filters invalid signals and insights', () => {
-    const json = JSON.stringify({
-      signals: [
-        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'e', summary: 's' },
-        { dimension: 'nonexistent', score: 0.5 },
-      ],
-      candidate_rules: [],
-      pattern_insights: ['valid', 123, null, '', 'also valid'],
-    });
-    const result = parseSynthesisResponse(json);
-    expect(result.signals).toHaveLength(1);
-    expect(result.insights).toEqual(['valid', 'also valid']);
+  it('strips plain code fences', () => {
+    const inner = '## Thinking Patterns\n\n- **Test**: content';
+    const wrapped = '```\n' + inner + '\n```';
+    const result = parseSynthesisResponse(wrapped);
+    expect(result).toBe(inner);
+  });
+
+  it('returns empty string for empty response', () => {
+    expect(parseSynthesisResponse('')).toBe('');
+    expect(parseSynthesisResponse('   ')).toBe('');
   });
 });

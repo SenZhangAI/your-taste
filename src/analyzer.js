@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import { complete } from './llm.js';
 import { DIMENSIONS, DIMENSION_NAMES } from './dimensions.js';
 import { debug } from './debug.js';
-import { readLang, languageName } from './lang.js';
+import { readLang, languageName, getTemplates } from './lang.js';
 
 // --- Shared helpers ---
 
@@ -68,28 +68,42 @@ export async function extractSignals(conversationText) {
 
 // --- Pass 2: Synthesize profile from accumulated signals ---
 
-export async function synthesizeProfile(decisionPoints, pendingRuleTexts = []) {
+export async function synthesizeProfile(decisionPoints, existingObservations = null, tasteRuleTexts = []) {
   const promptTemplate = await readFile(
     new URL('../prompts/synthesize-profile.md', import.meta.url),
     'utf8',
   );
 
-  const signalsText = decisionPoints.map((dp, i) =>
-    `${i + 1}. [${dp.strength}] ${dp.dimension}: AI proposed: ${dp.ai_proposed} → User: ${dp.user_reacted} → Principle: ${dp.principle}`
-  ).join('\n');
+  const signalsText = decisionPoints.map((dp, i) => {
+    let line = `${i + 1}. [${dp.strength}] ${dp.dimension}: AI proposed: ${dp.ai_proposed} → User: ${dp.user_reacted} → Principle: ${dp.principle}`;
+    if (dp.conditions) line += ` → Conditions: ${dp.conditions}`;
+    return line;
+  }).join('\n');
 
   const lang = await readLang();
+  const t = getTemplates(lang);
+
+  const existingSection = existingObservations
+    ? `## Existing Observations\n\nMerge new evidence into these existing observations. Re-evaluate all patterns against the combined evidence.\n\n${existingObservations}`
+    : '';
+
+  const tasteSection = tasteRuleTexts.length > 0
+    ? `## Existing taste.md Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
+    : '';
+
   const response = await callLLM(promptTemplate, {
-    DIMENSIONS: buildDimensionDesc(),
-    DIMENSION_NAMES: DIMENSION_NAMES.join(', '),
-    PENDING_RULES: buildPendingSection(pendingRuleTexts),
+    THINKING_PATTERNS_HEADER: t.thinkingPatternsHeader || 'Thinking Patterns',
+    BEHAVIORAL_PATTERNS_HEADER: t.behavioralPatternsHeader || 'Behavioral Patterns',
+    SUGGESTED_RULES_HEADER: t.suggestedRulesHeader || 'Suggested Rules',
+    EXISTING_OBSERVATIONS: existingSection,
+    TASTE_RULES: tasteSection,
     LANGUAGE: buildLanguageInstruction(lang),
     SIGNALS: signalsText,
   });
 
-  const parsed = parseSynthesisResponse(response);
-  debug(`synthesize: ${parsed.signals.length} signals, ${parsed.rules.length} rules, ${parsed.insights.length} insights`);
-  return parsed;
+  const result = parseSynthesisResponse(response);
+  debug(`synthesize: produced ${result.length} chars of observations markdown`);
+  return result;
 }
 
 // --- Legacy single-pass analysis (used by session-end.js hook) ---
@@ -164,36 +178,9 @@ export function parseExtractResponse(text) {
 }
 
 export function parseSynthesisResponse(text) {
-  try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const result = JSON.parse(cleaned);
-
-    const signals = (result.signals || []).filter(
-      s => DIMENSIONS[s.dimension] && typeof s.score === 'number',
-    );
-
-    const rules = (result.candidate_rules || [])
-      .map(r => {
-        if (r && typeof r === 'object' && typeof r.text === 'string' && r.text.trim().length > 0) {
-          return {
-            text: r.text.trim(),
-            evidence: typeof r.evidence === 'string' ? r.evidence.trim() : null,
-            confidence: typeof r.confidence === 'string' ? r.confidence : null,
-          };
-        }
-        if (typeof r === 'string' && r.trim().length > 0) return { text: r.trim(), evidence: null, confidence: null };
-        return null;
-      })
-      .filter(Boolean);
-
-    const insights = (result.pattern_insights || []).filter(
-      s => typeof s === 'string' && s.trim().length > 0,
-    );
-
-    return { signals, rules, insights };
-  } catch {
-    return { signals: [], rules: [], insights: [] };
-  }
+  let cleaned = text.trim();
+  cleaned = cleaned.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
+  return cleaned;
 }
 
 export function parseAnalysisResponse(text) {
