@@ -17,7 +17,9 @@ export function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
     debug(`llm: prompt length=${prompt.length} chars`);
 
-    const proc = spawn('claude', ['-p', '--model', 'haiku'], {
+    // Disable all tools — Haiku only does text analysis, must not execute anything.
+    // Without this, transcript content could be interpreted as instructions (prompt injection).
+    const proc = spawn('claude', ['-p', '--model', 'haiku', '--allowedTools', ''], {
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
