@@ -165,10 +165,11 @@ async function callOpenAI(baseUrl, apiKey, model, systemPrompt, userContent, sig
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
   messages.push({ role: 'user', content: userContent });
 
+  // Use streaming to avoid server-side timeouts on long generations
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ model, max_tokens: 4096, messages }),
+    body: JSON.stringify({ model, max_tokens: 4096, messages, stream: true }),
     signal,
   });
 
@@ -177,8 +178,27 @@ async function callOpenAI(baseUrl, apiKey, model, systemPrompt, userContent, sig
     throw new Error(`${model} API error ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  const data = await res.json();
-  return data.choices[0].message.content;
+  return readSSEStream(res.body, signal);
+}
+
+async function readSSEStream(body, signal) {
+  const decoder = new TextDecoder();
+  const chunks = [];
+
+  for await (const raw of body) {
+    if (signal?.aborted) break;
+    const text = decoder.decode(raw, { stream: true });
+    for (const line of text.split('\n')) {
+      if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+      try {
+        const chunk = JSON.parse(line.slice(6));
+        const content = chunk.choices?.[0]?.delta?.content;
+        if (content) chunks.push(content);
+      } catch { /* skip malformed SSE lines */ }
+    }
+  }
+
+  return chunks.join('');
 }
 
 // --- CLI Fallback ---

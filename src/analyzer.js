@@ -24,26 +24,35 @@ function buildPendingSection(pendingRuleTexts) {
   return `If a candidate rule is semantically equivalent to an existing pending rule below, use the EXACT text of the existing rule instead of generating new wording.\n\nExisting pending rules:\n${list}`;
 }
 
-const TRANSCRIPT_SEPARATOR = '## Conversation Transcript';
+// Markers that separate instructions (system) from data (user) in prompts.
+// Everything before the first matching marker → system prompt, everything after → user message.
+const DATA_SEPARATORS = [
+  '## Conversation Transcript',  // extract-signals prompt
+  '## Decision Points',          // synthesize-profile prompt
+];
 
-async function callLLM(promptTemplate, replacements) {
+async function callLLM(promptTemplate, replacements, { timeoutMs } = {}) {
   let prompt = promptTemplate;
   for (const [key, value] of Object.entries(replacements)) {
     prompt = prompt.replace(`{{${key}}}`, value);
   }
 
-  // Split instructions (system) from data (user) at transcript boundary
-  // This prevents LLMs from treating analysis instructions as injection
+  // Split instructions (system) from data (user) at the first matching separator.
+  // This prevents LLMs from treating analysis instructions as injection,
+  // and is more efficient for long prompts (system prompt is cached by providers).
   let systemPrompt = null;
   let userContent = prompt;
-  const sepIndex = prompt.indexOf(TRANSCRIPT_SEPARATOR);
-  if (sepIndex !== -1) {
-    systemPrompt = prompt.slice(0, sepIndex).trim();
-    userContent = prompt.slice(sepIndex).trim();
+  for (const sep of DATA_SEPARATORS) {
+    const sepIndex = prompt.indexOf(sep);
+    if (sepIndex !== -1) {
+      systemPrompt = prompt.slice(0, sepIndex).trim();
+      userContent = prompt.slice(sepIndex).trim();
+      break;
+    }
   }
 
   debug(`analyzer: sending prompt (${prompt.length} chars) to LLM`);
-  const response = await complete(userContent, { systemPrompt });
+  const response = await complete(userContent, { systemPrompt, timeoutMs });
   debug(`analyzer: raw response (${response.length} chars): ${response.slice(0, 500)}${response.length > 500 ? '...' : ''}`);
   return response;
 }
@@ -91,6 +100,7 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
     ? `## Existing taste.md Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
     : '';
 
+  // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points
   const response = await callLLM(promptTemplate, {
     THINKING_PATTERNS_HEADER: t.thinkingPatternsHeader || 'Thinking Patterns',
     BEHAVIORAL_PATTERNS_HEADER: t.behavioralPatternsHeader || 'Behavioral Patterns',
@@ -99,7 +109,7 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
     TASTE_RULES: tasteSection,
     LANGUAGE: buildLanguageInstruction(lang),
     SIGNALS: signalsText,
-  });
+  }, { timeoutMs: 300_000 });
 
   const result = parseSynthesisResponse(response);
   debug(`synthesize: produced ${result.length} chars of observations markdown`);
