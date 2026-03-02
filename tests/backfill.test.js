@@ -83,4 +83,43 @@ describe('backfill session discovery', () => {
     const sessions = await discoverSessions(TEST_PROJECTS);
     expect(sessions).toHaveLength(2); // under cap, all returned
   });
+
+  it('prioritizes current project sessions', async () => {
+    // project-a has older sessions, but is the "current project"
+    const oldA = `${TEST_PROJECTS}/-Users-me-project-a/s1.jsonl`;
+    const newB = `${TEST_PROJECTS}/-Users-me-project-b/s2.jsonl`;
+    await mkdir(`${TEST_PROJECTS}/-Users-me-project-a`, { recursive: true });
+    await mkdir(`${TEST_PROJECTS}/-Users-me-project-b`, { recursive: true });
+
+    await writeFile(oldA, '{}');
+    const past = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    await utimes(oldA, past, past);
+    await writeFile(newB, '{}');
+
+    // Without priority: newer (project-b) comes first
+    const noPriority = await discoverSessions(TEST_PROJECTS, { all: true });
+    expect(noPriority[0]).toContain('project-b');
+
+    // With priority: project-a comes first despite being older
+    const withPriority = await discoverSessions(TEST_PROJECTS, { all: true }, '/Users/me/project-a');
+    expect(withPriority[0]).toContain('project-a');
+    expect(withPriority[1]).toContain('project-b');
+  });
+
+  it('current project sessions fill max cap first', async () => {
+    await mkdir(`${TEST_PROJECTS}/-Users-me-myproj`, { recursive: true });
+    await mkdir(`${TEST_PROJECTS}/-Users-me-other`, { recursive: true });
+
+    // Create 3 sessions in current project, 3 in other
+    for (let i = 0; i < 3; i++) {
+      await writeFile(`${TEST_PROJECTS}/-Users-me-myproj/s${i}.jsonl`, '{}');
+      await writeFile(`${TEST_PROJECTS}/-Users-me-other/o${i}.jsonl`, '{}');
+    }
+
+    // With max=4, all 3 current-project sessions should be included
+    const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 4 }, '/Users/me/myproj');
+    const currentCount = sessions.filter(s => s.includes('-Users-me-myproj')).length;
+    expect(currentCount).toBe(3);
+    expect(sessions).toHaveLength(4);
+  });
 });

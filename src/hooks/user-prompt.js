@@ -4,6 +4,7 @@ import { loadGoal, renderGoalForInjection } from '../goal.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { loadGlobalContext, renderGlobalContext } from '../global-context.js';
 import { ensureProjectDir } from '../project.js';
+import { debug } from '../debug.js';
 
 const MAX_CHARS = 4000;
 
@@ -82,11 +83,18 @@ async function main() {
   }
 
   const additionalContext = await buildUserPromptContext(projectDir);
-  if (!additionalContext) process.exit(0);
+  if (!additionalContext) {
+    debug('user-prompt: no context to inject');
+    process.exit(0);
+  }
 
+  debug(`user-prompt: injecting ${additionalContext.length} chars of context`);
   console.log(JSON.stringify({
     hookSpecificOutput: { additionalContext },
   }));
 }
 
-main().catch(() => process.exit(0));
+main().catch((e) => {
+  debug(`user-prompt: fatal error — ${e.message}\n${e.stack}`);
+  process.exit(0);
+});

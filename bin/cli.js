@@ -8,8 +8,17 @@ import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
+import { debug, isDebug, FLAG_PATH, LOG_PATH } from '../src/debug.js';
+import { writeFile, rm, mkdir, readFile as fsReadFile, stat as fsStat } from 'fs/promises';
+import { dirname } from 'path';
 
 const PROJECTS_DIR = `${process.env.HOME}/.claude/projects`;
+
+// Parse --debug before command dispatch (sets env for child processes too)
+if (process.argv.includes('--debug')) {
+  process.env.__YOUR_TASTE_DEBUG_INTERNAL = '1';
+  // Re-import to pick up the flag (module already loaded, so use env directly)
+}
 
 const command = process.argv[2];
 
@@ -25,8 +34,10 @@ if (command === 'init') {
   await runStatus();
 } else if (command === 'goal') {
   await runGoal();
+} else if (command === 'debug') {
+  await runDebug();
 } else {
-  console.log('Usage: taste <command>\n');
+  console.log('Usage: taste <command> [options]\n');
   console.log('Commands:');
   console.log('  init              Scan past sessions and build your taste profile');
   console.log('    --all           Scan all sessions (slow, higher cost)');
@@ -37,6 +48,9 @@ if (command === 'init') {
   console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
+  console.log('  debug on|off|log  Toggle debug mode or view debug log');
+  console.log('\nGlobal options:');
+  console.log('  --debug           Show detailed debug output to stderr (this run only)');
   process.exit(1);
 }
 
@@ -75,6 +89,7 @@ async function runInit() {
   const result = await backfill(PROJECTS_DIR, {
     concurrency,
     filter,
+    currentProjectPath: process.cwd(),
     onProgress({ processed, skipped, total, current }) {
       // In non-TTY (Claude Code Bash), use newlines at intervals
       // In TTY (terminal), use carriage return for in-place update
@@ -265,5 +280,32 @@ async function runGoal() {
     console.log('Edit this file to set your project vision, constraints, and architectural decisions.');
   } else {
     console.log(`Goal file: ${path}`);
+  }
+}
+
+async function runDebug() {
+  const sub = process.argv[3];
+  if (sub === 'on') {
+    await mkdir(dirname(FLAG_PATH), { recursive: true });
+    await writeFile(FLAG_PATH, '');
+    // Clear previous log
+    await rm(LOG_PATH, { force: true });
+    console.log('Debug mode ON — hooks will log to:');
+    console.log(`  ${LOG_PATH}`);
+  } else if (sub === 'off') {
+    await rm(FLAG_PATH, { force: true });
+    console.log('Debug mode OFF.');
+    console.log(`Log preserved at: ${LOG_PATH}`);
+  } else if (sub === 'log') {
+    try {
+      const content = await fsReadFile(LOG_PATH, 'utf8');
+      process.stdout.write(content);
+    } catch {
+      console.log('No debug log found.');
+    }
+  } else {
+    const on = isDebug();
+    console.log(`Debug mode: ${on ? 'ON' : 'OFF'}`);
+    console.log(`\nUsage: taste debug on|off|log`);
   }
 }
