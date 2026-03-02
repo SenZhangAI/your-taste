@@ -83,23 +83,20 @@ async function runInit() {
     console.log(`Scanning up to ${max} most recent sessions (use --all for full scan)...\n`);
   }
 
-  const concurrency = 3; // claude -p subprocess has overhead, keep modest
   let lastLog = 0;
+  let aborted = false;
 
   const result = await backfill(PROJECTS_DIR, {
-    concurrency,
     filter,
     currentProjectPath: process.cwd(),
-    onProgress({ processed, skipped, total, current }) {
-      // In non-TTY (Claude Code Bash), use newlines at intervals
-      // In TTY (terminal), use carriage return for in-place update
+    onProgress({ processed, skipped, total, current, aborted: a }) {
+      if (a) { aborted = true; return; }
       if (process.stdout.isTTY) {
         const pct = Math.round((current / total) * 100);
         const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
         process.stdout.write(`\rAnalyzing... ${bar} ${current}/${total}`);
       } else {
         const pct = Math.round((current / total) * 100);
-        // Log every 10%
         const bucket = Math.floor(pct / 10) * 10;
         if (bucket > lastLog || current === total) {
           lastLog = bucket;
@@ -110,6 +107,10 @@ async function runInit() {
   });
 
   console.log('');
+
+  if (aborted) {
+    console.log('Aborted: multiple consecutive LLM failures. Run `taste debug log` for details.');
+  }
 
   if (!result) {
     console.log('No taste signals found in past sessions.');

@@ -1,5 +1,5 @@
-import { readdir, stat } from 'fs/promises';
-import { join } from 'path';
+import { readdir, stat, readFile, writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
 import { analyzeTranscript } from './analyzer.js';
@@ -7,6 +7,8 @@ import { createDefaultProfile, updateProfile } from './profile.js';
 import { debug } from './debug.js';
 
 const DEFAULT_MAX_SESSIONS = 50;
+const MAX_CONSECUTIVE_FAILURES = 3;
+const PROCESSED_PATH = `${process.env.HOME}/.your-taste/processed.json`;
 
 /**
  * Convert a filesystem path to its Claude Code project directory name.
@@ -85,6 +87,25 @@ export async function discoverSessions(projectsDir, filter = {}, currentProjectP
   return filtered.map(s => s.path);
 }
 
+/**
+ * Load the set of already-processed session paths.
+ * Prevents re-analyzing the same sessions on repeated init runs.
+ */
+async function loadProcessed() {
+  try {
+    const data = await readFile(PROCESSED_PATH, 'utf8');
+    const arr = JSON.parse(data);
+    return new Set(arr);
+  } catch {
+    return new Set();
+  }
+}
+
+async function saveProcessed(set) {
+  await mkdir(dirname(PROCESSED_PATH), { recursive: true });
+  await writeFile(PROCESSED_PATH, JSON.stringify([...set]));
+}
+
 // Conversation text beyond this is truncated (keep tail — recent interactions have richer signal)
 const MAX_CONVERSATION_CHARS = 30_000;
 
@@ -100,13 +121,13 @@ export async function processSession(transcriptPath) {
     return { signals: [] };
   }
 
-  let conversation = extractConversation(messages);
+  let conversation = extractConversation(messages, { compact: true });
   if (conversation.length < 200) {
     debug(`session: skipped (conversation ${conversation.length} chars < 200)`);
     return { signals: [] };
   }
 
-  // Truncate very long conversations — keep the tail (recent exchanges are more signal-rich)
+  // Safety net: truncate if still too long after compact extraction
   if (conversation.length > MAX_CONVERSATION_CHARS) {
     debug(`session: truncating ${conversation.length} → ${MAX_CONVERSATION_CHARS} chars (keeping tail)`);
     conversation = '...(earlier conversation truncated)...\n\n' + conversation.slice(-MAX_CONVERSATION_CHARS);
@@ -120,42 +141,64 @@ export async function processSession(transcriptPath) {
 }
 
 /**
- * Orchestrate full backfill: discover sessions, analyze in batches, build profile.
+ * Orchestrate full backfill: discover sessions, analyze one at a time, build profile.
+ *
+ * Sequential processing (no concurrency) — each `claude -p` subprocess is heavy.
+ * Fail-fast: aborts after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
+ * Tracks processed sessions to avoid re-analyzing on repeated runs.
  */
 export async function backfill(projectsDir, options = {}) {
-  const { concurrency = 3, onProgress, filter, currentProjectPath } = options;
+  const { onProgress, filter, currentProjectPath } = options;
 
   const sessionPaths = await discoverSessions(projectsDir, filter, currentProjectPath);
-  const total = sessionPaths.length;
-  debug(`backfill: discovered ${total} sessions to process (concurrency=${concurrency})`);
+
+  // Skip already-processed sessions
+  const alreadyProcessed = await loadProcessed();
+  const toProcess = sessionPaths.filter(p => !alreadyProcessed.has(p));
+  const skipCount = sessionPaths.length - toProcess.length;
+  if (skipCount > 0) debug(`backfill: skipping ${skipCount} already-processed sessions`);
+
+  const total = toProcess.length;
+  debug(`backfill: ${total} sessions to process (sequential)`);
+
   let processed = 0;
   let skipped = 0;
+  let consecutiveFailures = 0;
   const allSignals = [];
 
-  for (let i = 0; i < total; i += concurrency) {
-    const batch = sessionPaths.slice(i, i + concurrency);
-    const results = await Promise.allSettled(batch.map(p => processSession(p)));
+  for (let i = 0; i < total; i++) {
+    const sessionPath = toProcess[i];
 
-    for (let j = 0; j < results.length; j++) {
-      const result = results[j];
-      const sessionPath = batch[j];
-      if (result.status === 'fulfilled' && result.value.signals.length > 0) {
-        allSignals.push(...result.value.signals);
+    try {
+      const result = await processSession(sessionPath);
+      if (result.signals.length > 0) {
+        allSignals.push(...result.signals);
         processed++;
       } else {
-        if (result.status === 'rejected') {
-          debug(`backfill: FAILED ${sessionPath} — ${result.reason?.message || result.reason}`);
-        }
         skipped++;
+      }
+      consecutiveFailures = 0;
+      // Mark as processed (even if no signals — it was analyzed successfully)
+      alreadyProcessed.add(sessionPath);
+      await saveProcessed(alreadyProcessed);
+    } catch (err) {
+      debug(`backfill: FAILED ${sessionPath} — ${err.message}`);
+      skipped++;
+      consecutiveFailures++;
+
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        debug(`backfill: aborting — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
+        onProgress?.({ processed, skipped, total: total + skipCount, current: i + 1, aborted: true });
+        break;
       }
     }
 
-    onProgress?.({ processed, skipped, total, current: Math.min(i + concurrency, total) });
+    onProgress?.({ processed, skipped, total: total + skipCount, current: i + 1 + skipCount });
   }
 
   if (allSignals.length === 0) return null;
 
   const profile = createDefaultProfile();
   await updateProfile(profile, allSignals);
-  return { profile, processed, skipped, total };
+  return { profile, processed, skipped: skipped + skipCount, total: total + skipCount };
 }

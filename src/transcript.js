@@ -24,21 +24,48 @@ export async function parseTranscript(transcriptPath) {
  * Extract human-readable conversation from parsed transcript messages.
  * Filters out tool_use, tool_result, and system messages -- only keeps
  * human text and assistant text content.
+ *
+ * When compact=true (for taste analysis), strips system-generated tags
+ * from human messages and caps each message to keep only decision-relevant text.
  */
-export function extractConversation(messages) {
+export function extractConversation(messages, { compact = false } = {}) {
   const lines = [];
 
   for (const msg of messages) {
     const role = resolveRole(msg);
     if (!role) continue;
 
-    const text = extractText(msg.message?.content ?? msg.content);
+    let text = extractText(msg.message?.content ?? msg.content);
     if (!text) continue;
+
+    if (compact) {
+      text = compactMessage(text, role);
+      if (!text) continue;
+    }
 
     lines.push(`${role}: ${text}`);
   }
 
   return lines.join('\n\n');
+}
+
+// System-generated tags in Claude Code user messages — no taste signal
+const SYSTEM_TAG_RE = /<(?:system-reminder|task-notification|command-name|command-message|command-args|local-command-stdout|local-command-caveat|claude-mem-context|user-prompt-submit-hook)[^>]*>[\s\S]*?<\/(?:system-reminder|task-notification|command-name|command-message|command-args|local-command-stdout|local-command-caveat|claude-mem-context|user-prompt-submit-hook)>/g;
+
+// Human: 500 chars after stripping system tags — taste signal is in short decisions
+// Assistant: 300 chars — just enough to show what was proposed
+const HUMAN_CAP = 500;
+const ASSISTANT_CAP = 300;
+
+function compactMessage(text, role) {
+  if (role === 'human') {
+    text = text.replace(SYSTEM_TAG_RE, '').trim();
+    if (!text) return null;
+    if (text.length > HUMAN_CAP) text = text.slice(0, HUMAN_CAP) + '...';
+  } else {
+    if (text.length > ASSISTANT_CAP) text = text.slice(0, ASSISTANT_CAP) + '...';
+  }
+  return text;
 }
 
 function resolveRole(msg) {

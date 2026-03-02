@@ -3,6 +3,21 @@ import { debug } from './debug.js';
 
 const DEFAULT_TIMEOUT_MS = 90_000; // 90 seconds per LLM call
 
+// Track active child processes so they can be killed on parent exit
+const activeProcs = new Set();
+
+function killAllChildren() {
+  for (const proc of activeProcs) {
+    try { proc.kill('SIGTERM'); } catch {}
+  }
+  activeProcs.clear();
+}
+
+// Clean up child processes when parent is terminated
+process.on('SIGINT', () => { killAllChildren(); process.exit(130); });
+process.on('SIGTERM', () => { killAllChildren(); process.exit(143); });
+process.on('exit', killAllChildren);
+
 /**
  * Call Claude via the `claude -p` CLI, reusing the user's existing auth.
  * Unsets CLAUDECODE env var to allow nested invocation.
@@ -24,6 +39,8 @@ export function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    activeProcs.add(proc);
+
     let stdout = '';
     let stderr = '';
     let killed = false;
@@ -39,6 +56,7 @@ export function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
     proc.on('error', (err) => {
       clearTimeout(timer);
+      activeProcs.delete(proc);
       debug(`llm: spawn error: ${err.message}`);
       if (err.code === 'ENOENT') {
         reject(new Error('claude CLI not found. Is Claude Code installed?'));
@@ -49,6 +67,7 @@ export function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
     proc.on('close', (code) => {
       clearTimeout(timer);
+      activeProcs.delete(proc);
       debug(`llm: exit code=${code}, stdout=${stdout.length} chars, stderr=${stderr.length > 0 ? stderr.trim() : '(empty)'}`);
       if (killed) reject(new Error(`claude timed out after ${timeoutMs / 1000}s`));
       else if (code !== 0) reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`));
