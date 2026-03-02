@@ -1,5 +1,37 @@
 // src/instruction-renderer.js
 
+import { extractSection } from './observations.js';
+
+const OBSERVATIONS_HEADER = "The user's cognitive and behavioral patterns (learned from past sessions):";
+
+export function renderFromObservations(observationsMarkdown) {
+  if (!observationsMarkdown) return null;
+
+  const sections = [];
+
+  const thinkingHeaders = ['Thinking Patterns', '思维模式'];
+  const behavioralHeaders = ['Behavioral Patterns', '行为模式'];
+
+  let thinking = null;
+  for (const h of thinkingHeaders) {
+    thinking = extractSection(observationsMarkdown, h);
+    if (thinking) break;
+  }
+
+  let behavioral = null;
+  for (const h of behavioralHeaders) {
+    behavioral = extractSection(observationsMarkdown, h);
+    if (behavioral) break;
+  }
+
+  if (thinking) sections.push(thinking);
+  if (behavioral) sections.push(behavioral);
+
+  if (sections.length === 0) return null;
+
+  return `${OBSERVATIONS_HEADER}\n\n${sections.join('\n\n')}`;
+}
+
 const TEMPLATES = {
   risk_tolerance: {
     low: 'Prefer gradual migration over rewrites. Include rollback plans for production changes. Favor proven patterns over novel approaches.',
