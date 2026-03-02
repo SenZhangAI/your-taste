@@ -35,7 +35,7 @@ export function extractConversation(messages, { compact = false } = {}) {
     const role = resolveRole(msg);
     if (!role) continue;
 
-    let text = extractText(msg.message?.content ?? msg.content);
+    let text = extractText(msg.message?.content ?? msg.content, { includeToolSummary: compact });
     if (!text) continue;
 
     if (compact) {
@@ -78,13 +78,30 @@ function resolveRole(msg) {
   return null;
 }
 
-function extractText(content) {
+function extractText(content, { includeToolSummary = false } = {}) {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    const textParts = content
-      .filter(block => block.type === 'text')
-      .map(block => block.text);
-    return textParts.length > 0 ? textParts.join('\n') : null;
+    const parts = [];
+    for (const block of content) {
+      if (block.type === 'text') {
+        parts.push(block.text);
+      } else if (includeToolSummary && block.type === 'tool_use') {
+        parts.push(summarizeToolUse(block));
+      }
+    }
+    return parts.length > 0 ? parts.join('\n') : null;
   }
   return null;
+}
+
+function summarizeToolUse(block) {
+  const name = block.name || 'unknown';
+  const input = block.input;
+  if (!input) return `[${name}]`;
+
+  // Extract the most informative field for each tool
+  const detail = input.file_path || input.command?.slice(0, 80) || input.pattern || input.query || '';
+  if (!detail) return `[${name}]`;
+  const short = detail.length > 80 ? detail.slice(0, 80) + '...' : detail;
+  return `[${name}: ${short}]`;
 }
