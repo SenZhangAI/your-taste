@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { parse, stringify } from 'yaml';
+import { readObservations, extractSuggestedRules } from './observations.js';
 
 function getDir() {
   return process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
@@ -51,4 +52,10 @@ export async function removePendingRules(pending, textsToRemove) {
 
 export function getPendingRuleTexts(pending) {
   return pending.rules.map(r => r.text);
+}
+
+export async function readPendingFromObservations() {
+  const content = await readObservations();
+  if (!content) return [];
+  return extractSuggestedRules(content);
 }

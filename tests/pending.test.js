@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, rm } from 'fs/promises';
+import { mkdir, rm, writeFile } from 'fs/promises';
 import { readPending, updatePending, removePendingRules, getPendingRuleTexts } from '../src/pending.js';
 
 const TEST_DIR = '/tmp/your-taste-test-pending';
@@ -77,6 +77,26 @@ describe('pending rules', () => {
     pending = await readPending();
     expect(pending.rules).toHaveLength(1);
     expect(pending.rules[0].text).toBe('Rule B');
+  });
+
+  it('reads suggested rules from observations.md', async () => {
+    const obsContent = `## Thinking Patterns
+
+- **Test**: content
+
+## Suggested Rules
+
+- "Act independently after plan confirmation"
+- "Trace full usage path for parameters"`;
+
+    await writeFile(`${TEST_DIR}/observations.md`, obsContent);
+
+    const { readPendingFromObservations } = await import('../src/pending.js');
+    const rules = await readPendingFromObservations();
+    expect(rules).toEqual([
+      'Act independently after plan confirmation',
+      'Trace full usage path for parameters',
+    ]);
   });
 
   it('getPendingRuleTexts returns array of texts', async () => {
