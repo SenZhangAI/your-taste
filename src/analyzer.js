@@ -24,13 +24,26 @@ function buildPendingSection(pendingRuleTexts) {
   return `If a candidate rule is semantically equivalent to an existing pending rule below, use the EXACT text of the existing rule instead of generating new wording.\n\nExisting pending rules:\n${list}`;
 }
 
+const TRANSCRIPT_SEPARATOR = '## Conversation Transcript';
+
 async function callLLM(promptTemplate, replacements) {
   let prompt = promptTemplate;
   for (const [key, value] of Object.entries(replacements)) {
     prompt = prompt.replace(`{{${key}}}`, value);
   }
+
+  // Split instructions (system) from data (user) at transcript boundary
+  // This prevents LLMs from treating analysis instructions as injection
+  let systemPrompt = null;
+  let userContent = prompt;
+  const sepIndex = prompt.indexOf(TRANSCRIPT_SEPARATOR);
+  if (sepIndex !== -1) {
+    systemPrompt = prompt.slice(0, sepIndex).trim();
+    userContent = prompt.slice(sepIndex).trim();
+  }
+
   debug(`analyzer: sending prompt (${prompt.length} chars) to LLM`);
-  const response = await complete(prompt);
+  const response = await complete(userContent, { systemPrompt });
   debug(`analyzer: raw response (${response.length} chars): ${response.slice(0, 500)}${response.length > 500 ? '...' : ''}`);
   return response;
 }

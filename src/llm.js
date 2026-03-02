@@ -59,6 +59,13 @@ const PROVIDERS = {
     defaultModel: 'anthropic/claude-haiku',
     baseUrl: 'https://openrouter.ai/api/v1',
   },
+  'claude-cli-proxy': {
+    name: 'Claude CLI Proxy',
+    apiFormat: 'openai-completions',
+    envKey: null, // uses Claude Code OAuth — must be explicitly configured
+    defaultModel: 'claude-sonnet-4',
+    baseUrl: 'http://localhost:3456/v1',
+  },
   ollama: {
     name: 'Ollama',
     apiFormat: 'openai-completions',
@@ -126,7 +133,10 @@ export function resolveProvider(config = null) {
 
 // --- API Adapters ---
 
-async function callAnthropic(baseUrl, apiKey, model, prompt, signal) {
+async function callAnthropic(baseUrl, apiKey, model, systemPrompt, userContent, signal) {
+  const body = { model, max_tokens: 4096, messages: [{ role: 'user', content: userContent }] };
+  if (systemPrompt) body.system = systemPrompt;
+
   const res = await fetch(`${baseUrl}/v1/messages`, {
     method: 'POST',
     headers: {
@@ -134,11 +144,7 @@ async function callAnthropic(baseUrl, apiKey, model, prompt, signal) {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+    body: JSON.stringify(body),
     signal,
   });
 
@@ -151,18 +157,18 @@ async function callAnthropic(baseUrl, apiKey, model, prompt, signal) {
   return data.content[0].text;
 }
 
-async function callOpenAI(baseUrl, apiKey, model, prompt, signal) {
+async function callOpenAI(baseUrl, apiKey, model, systemPrompt, userContent, signal) {
   const headers = { 'content-type': 'application/json' };
   if (apiKey) headers['authorization'] = `Bearer ${apiKey}`;
+
+  const messages = [];
+  if (systemPrompt) messages.push({ role: 'system', content: systemPrompt });
+  messages.push({ role: 'user', content: userContent });
 
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+    body: JSON.stringify({ model, max_tokens: 4096, messages }),
     signal,
   });
 
@@ -242,9 +248,9 @@ function completeCLI(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
 // --- Main Entry ---
 
-export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS, systemPrompt = null } = {}) {
   const markedPrompt = `${META_MARKER}\n${prompt}`;
-  debug(`llm: prompt length=${markedPrompt.length} chars`);
+  debug(`llm: prompt length=${markedPrompt.length} chars${systemPrompt ? `, system=${systemPrompt.length} chars` : ''}`);
 
   const config = await loadConfig();
   const provider = resolveProvider(config);
@@ -256,7 +262,7 @@ export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) 
 
     try {
       const call = provider.apiFormat === 'anthropic-messages' ? callAnthropic : callOpenAI;
-      const result = await call(provider.baseUrl, provider.apiKey, provider.model, markedPrompt, controller.signal);
+      const result = await call(provider.baseUrl, provider.apiKey, provider.model, systemPrompt, markedPrompt, controller.signal);
       return result;
     } catch (err) {
       if (err.name === 'AbortError') {

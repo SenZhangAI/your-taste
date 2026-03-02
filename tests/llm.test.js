@@ -78,6 +78,14 @@ describe('resolveProvider', () => {
     expect(p).toBeNull();
   });
 
+  it('claude-cli-proxy uses localhost:3456 with no API key', () => {
+    const p = resolveProvider({ provider: 'claude-cli-proxy' });
+    expect(p.id).toBe('claude-cli-proxy');
+    expect(p.apiKey).toBeNull();
+    expect(p.baseUrl).toBe('http://localhost:3456/v1');
+    expect(p.model).toBe('claude-sonnet-4');
+  });
+
   it('ollama has no API key and null envKey', () => {
     const p = resolveProvider({ provider: 'ollama' });
     expect(p.id).toBe('ollama');
