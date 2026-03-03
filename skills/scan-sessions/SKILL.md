@@ -27,3 +27,9 @@ Scan past Claude Code sessions to build a preference profile.
    - **First scan is a meaningful start.** Even 2-3 signals are valuable — the system now understands enough to start adapting. Frame it as "your-taste now knows X about you" not "only X signals found."
    - **Undiscovered dimensions are opportunities**, not gaps. "As we work together more, your-taste will pick up on your risk tolerance and quality standards too" — forward-looking, not deficit-focused.
    - Tell them the profile will be automatically applied on their next session start.
+
+5. After presenting the scan results, invoke the `taste:apply-observations` skill to suggest CLAUDE.md updates based on the new observations. Say something like:
+
+   "Now let me check if there are new insights to add to your CLAUDE.md..."
+
+   Then invoke the skill. If the skill reports no changes needed, that's fine — don't treat it as an error.
