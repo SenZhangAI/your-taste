@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readLang, getTemplates } from './lang.js';
 
 function getDir() {
   return process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
@@ -24,7 +25,8 @@ export async function appendRules(rules) {
   let content = await readTasteFile();
 
   if (!content) {
-    content = '# Your Taste\n';
+    const t = getTemplates(await readLang());
+    content = `${t.tasteHeader}\n`;
   }
 
   const existingRules = content.match(/^- .+$/gm) || [];

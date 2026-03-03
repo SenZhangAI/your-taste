@@ -4,11 +4,15 @@ import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 import { readPending, removePendingRules } from '../src/pending.js';
 import { readTasteFile, appendRules } from '../src/taste-file.js';
+import { readObservations, writeObservations } from '../src/observations.js';
 import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
+import { synthesizeProfile } from '../src/analyzer.js';
+import { collectForSynthesis } from '../src/signals.js';
 import { debug, isDebug, FLAG_PATH, LOG_PATH } from '../src/debug.js';
+import { readLang, writeLang, hasLangFile, languageName } from '../src/lang.js';
 import { writeFile, rm, mkdir, readFile as fsReadFile, stat as fsStat } from 'fs/promises';
 import { dirname } from 'path';
 
@@ -34,6 +38,10 @@ if (command === 'init') {
   await runStatus();
 } else if (command === 'goal') {
   await runGoal();
+} else if (command === 'lang') {
+  await runLang();
+} else if (command === 'synthesize') {
+  await runSynthesize();
 } else if (command === 'debug') {
   await runDebug();
 } else {
@@ -44,10 +52,15 @@ if (command === 'init') {
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
   console.log('  show              Display your taste profile');
+  console.log('  synthesize        Re-run Stage 2 synthesis from existing signals');
+  console.log('    --dry-run       Output to stdout instead of writing observations.md');
+  console.log('    --signals <p>   Use specific signals file');
+  console.log('    --model <m>     Override model for synthesis');
   console.log('  status            Show what your-taste knows about you and this project');
   console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
+  console.log('  lang [code]       Show or set preferred language (zh, en, ja, ...)');
   console.log('  debug on|off|log  Toggle debug mode or view debug log');
   console.log('\nGlobal options:');
   console.log('  --debug           Show detailed debug output to stderr (this run only)');
@@ -86,30 +99,43 @@ async function runInit() {
   let lastLog = 0;
   let aborted = false;
 
-  const result = await backfill(PROJECTS_DIR, {
-    filter,
-    currentProjectPath: process.cwd(),
-    onProgress({ processed, skipped, total, current, aborted: a }) {
-      if (a) { aborted = true; return; }
-      if (process.stdout.isTTY) {
-        const pct = Math.round((current / total) * 100);
-        const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
-        process.stdout.write(`\rAnalyzing... ${bar} ${current}/${total}`);
-      } else {
-        const pct = Math.round((current / total) * 100);
-        const bucket = Math.floor(pct / 10) * 10;
-        if (bucket > lastLog || current === total) {
-          lastLog = bucket;
-          console.log(`Analyzing... ${current}/${total} (${pct}%)`);
+  let result;
+  try {
+    result = await backfill(PROJECTS_DIR, {
+      filter,
+      currentProjectPath: process.cwd(),
+      onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
+        if (a) { aborted = true; return; }
+        if (phase === 'pass2') {
+          if (process.stdout.isTTY) process.stdout.write('\rSynthesizing observations...');
+          else console.log('Synthesizing observations...');
+          return;
         }
-      }
-    },
-  });
+        if (process.stdout.isTTY) {
+          const pct = Math.round((current / total) * 100);
+          const bar = '\u2588'.repeat(Math.round(pct / 5)) + '\u2591'.repeat(20 - Math.round(pct / 5));
+          process.stdout.write(`\rScanning sessions... ${bar} ${current}/${total}`);
+        } else {
+          const pct = Math.round((current / total) * 100);
+          const bucket = Math.floor(pct / 10) * 10;
+          if (bucket > lastLog || current === total) {
+            lastLog = bucket;
+            console.log(`Scanning sessions... ${current}/${total} (${pct}%)`);
+          }
+        }
+      },
+    });
+  } catch (err) {
+    console.log('');
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
 
   console.log('');
 
   if (aborted) {
-    console.log('Aborted: multiple consecutive LLM failures. Run `taste debug log` for details.');
+    console.log('Aborted: some LLM calls failed, but partial results were saved.');
+    console.log('Run `taste debug log` for details.\n');
   }
 
   if (!result) {
@@ -118,22 +144,27 @@ async function runInit() {
     process.exit(0);
   }
 
-  console.log(`Profile built from ${result.processed} sessions (${result.skipped} skipped):\n`);
+  console.log(`Analysis complete: ${result.extracted} sessions analyzed (${result.skipped} skipped).\n`);
 
-  const dims = result.profile.dimensions;
-  for (const [key, dim] of Object.entries(dims)) {
-    if (dim.evidence_count === 0) continue;
-    const barLen = Math.round(dim.score * 10);
-    const bar = '\u2588'.repeat(barLen) + '\u2591'.repeat(10 - barLen);
-    const label = dim.score < 0.35 ? 'low' : dim.score > 0.65 ? 'high' : 'mid';
-    const name = key.padEnd(24);
-    console.log(`  ${name} ${bar}  ${dim.score.toFixed(2)}  ${label.padEnd(6)} (${dim.evidence_count} signals)`);
+  if (result.observations) {
+    console.log('Observations saved to ~/.your-taste/observations.md');
   }
 
-  console.log('\nProfile saved to ~/.your-taste/profile.yaml');
+  const tasteContent = await readTasteFile();
+  if (tasteContent) {
+    console.log('Behavioral rules: ~/.your-taste/taste.md');
+  }
 }
 
 async function runShow() {
+  const observations = await readObservations();
+  if (observations) {
+    console.log('Observations');
+    console.log('\u2550'.repeat(12) + '\n');
+    console.log(observations);
+    console.log('');
+  }
+
   const profile = await readProfile();
 
   console.log('Your Taste Profile');
@@ -281,6 +312,105 @@ async function runGoal() {
     console.log('Edit this file to set your project vision, constraints, and architectural decisions.');
   } else {
     console.log(`Goal file: ${path}`);
+  }
+}
+
+async function runLang() {
+  const code = process.argv[3];
+  if (!code) {
+    const current = await readLang();
+    const hasFile = await hasLangFile();
+    if (hasFile) {
+      console.log(`Language: ${current} (${languageName(current)})`);
+    } else {
+      console.log(`Language: ${current} (default — run \`taste lang <code>\` to set)`);
+    }
+    return;
+  }
+  await writeLang(code);
+  console.log(`Language set to: ${code} (${languageName(code)})`);
+}
+
+function parseSynthesizeFlags() {
+  const args = process.argv.slice(3);
+  const flags = { dryRun: false, signals: null, model: null };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--dry-run') {
+      flags.dryRun = true;
+    } else if (args[i] === '--signals' && args[i + 1]) {
+      flags.signals = args[++i];
+    } else if (args[i] === '--model' && args[i + 1]) {
+      flags.model = args[++i];
+    }
+  }
+
+  return flags;
+}
+
+async function runSynthesize() {
+  const flags = parseSynthesizeFlags();
+  const tasteDir = process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+
+  // Resolve signals file path: explicit flag > default > .bak fallback
+  let signalsPath = flags.signals;
+  if (!signalsPath) {
+    const defaultPath = `${tasteDir}/init-signals.jsonl`;
+    const bakPath = `${defaultPath}.bak`;
+    try {
+      await fsStat(defaultPath);
+      signalsPath = defaultPath;
+    } catch {
+      try {
+        await fsStat(bakPath);
+        signalsPath = bakPath;
+        console.log(`Using backup signals: ${bakPath}`);
+      } catch {
+        console.error('No signals file found. Run `taste init` first, or specify --signals <path>.');
+        process.exit(1);
+      }
+    }
+  }
+
+  // Read and parse signals
+  let entries;
+  try {
+    const content = await fsReadFile(signalsPath, 'utf8');
+    entries = content.split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+  } catch (err) {
+    console.error(`Failed to read signals: ${err.message}`);
+    process.exit(1);
+  }
+
+  const decisionPoints = collectForSynthesis(entries);
+  if (decisionPoints.length === 0) {
+    console.log('No decision points found in signals file.');
+    process.exit(0);
+  }
+
+  console.log(`Synthesizing from ${decisionPoints.length} decision points...`);
+
+  const existingObservations = await readObservations();
+  const tasteContent = await readTasteFile();
+  const tasteRules = tasteContent
+    ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
+    : [];
+
+  try {
+    const result = await synthesizeProfile(decisionPoints, existingObservations, tasteRules, flags.model);
+
+    if (flags.dryRun) {
+      console.log('\n--- observations.md (dry run) ---\n');
+      console.log(result);
+    } else {
+      await writeObservations(result);
+      console.log(`\nWrote observations.md (${result.length} chars)`);
+    }
+  } catch (err) {
+    console.error(`Synthesis failed: ${err.message}`);
+    process.exit(1);
   }
 }
 

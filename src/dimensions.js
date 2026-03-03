@@ -27,11 +27,11 @@ export const DIMENSIONS = {
   },
   autonomy_expectation: {
     name: 'autonomy_expectation',
-    low: 'collaborative — check before acting, present options, confirm decisions',
-    high: 'autonomous — act independently, decide and execute, minimize questions',
+    low: 'collaborative — AI checks before acting, presents options, confirms decisions',
+    high: 'autonomous — AI acts independently, decides and executes, minimizes questions',
     personalityNarrative: {
-      low: 'You value collaboration and shared decision-making. Checking in before acting builds trust and catches blind spots.',
-      high: 'You move fast by trusting your judgment. Decisive action keeps momentum high and reduces back-and-forth.',
+      low: 'You prefer AI to check in before acting. Shared decision-making builds trust and catches blind spots.',
+      high: 'You expect AI to act decisively without asking. Less back-and-forth, more momentum.',
     },
   },
   communication_style: {

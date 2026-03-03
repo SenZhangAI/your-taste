@@ -10,13 +10,18 @@ import {
 
 describe('project context storage (Markdown)', () => {
   let projectDir;
+  let tasteDir;
 
   beforeEach(async () => {
     projectDir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
+    tasteDir = await mkdtemp(join(tmpdir(), 'taste-dir-'));
+    process.env.YOUR_TASTE_DIR = tasteDir;
   });
 
   afterEach(async () => {
+    delete process.env.YOUR_TASTE_DIR;
     await rm(projectDir, { recursive: true });
+    await rm(tasteDir, { recursive: true });
   });
 
   it('returns empty context when file missing', async () => {
@@ -118,13 +123,18 @@ describe('project context storage (Markdown)', () => {
 
 describe('project context rendering', () => {
   let projectDir;
+  let tasteDir;
 
   beforeEach(async () => {
     projectDir = await mkdtemp(join(tmpdir(), 'taste-ctx-'));
+    tasteDir = await mkdtemp(join(tmpdir(), 'taste-dir-'));
+    process.env.YOUR_TASTE_DIR = tasteDir;
   });
 
   afterEach(async () => {
+    delete process.env.YOUR_TASTE_DIR;
     await rm(projectDir, { recursive: true });
+    await rm(tasteDir, { recursive: true });
   });
 
   it('returns null when context is empty', async () => {

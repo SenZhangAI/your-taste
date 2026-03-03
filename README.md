@@ -48,30 +48,30 @@ We learn from what you *do*, not what you *say*. Your corrections, your choices,
 
 **No more cold starts.** `taste init` scans your conversation history and builds your preference profile in seconds. Day-100 experience from day one.
 
-**Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste translates your preferences into concrete behavioral instructions — deterministic, testable, applied the same way every time.
+**Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste distills your preferences into observations with context conditions and concrete behavioral rules — applied the same way every time.
 
 **Zero effort.** No config files to maintain. No questionnaires. The plugin watches how you respond to AI proposals and learns silently. You just work.
 
-**Your data stays yours.** Everything lives locally on your machine. No project code, no business logic, no conversation content is ever stored — just preference scores and distilled taste statements. Wide in, narrow out.
+**Your data stays yours.** Everything lives locally on your machine. No project code, no business logic, no conversation content is ever stored — just distilled observations and behavioral rules. Wide in, narrow out.
 
 ## How It Works
 
 ```
-Session ends → Read transcript → Filter PII → Extract signals → Update profile + context
+Session ends → Read transcript → Filter PII → Extract decision points → Synthesize observations
                                                                           ↓
 Every message → Inject thinking framework + project goal + recent context
                                                                           ↓
-Session starts → Load taste.md + goal.md + context.md → AI starts informed
+Session starts → Load taste.md + observations + goal.md + context.md → AI starts informed
 ```
 
 **Learning (SessionEnd)**
 1. Privacy filter strips all credentials and PII locally
-2. Claude Haiku extracts dimension scores, candidate behavioral rules, and strategic context (decisions, open questions, topics)
-3. Profile updates with Bayesian scoring; rules accumulate in `pending.yaml`
+2. **Stage 1**: LLM extracts decision points — moments where you corrected, rejected, or redirected the AI — tracing surface behavior back to underlying principles (A→B→C inference)
+3. **Stage 2**: Decision points across sessions are synthesized into `observations.md` — a narrative document with three sections: Thinking Patterns (stable cognitive models), Behavioral Patterns (context-dependent preferences with motivation), and Suggested Rules (candidates for `taste.md`)
 4. Project `context.md` and `global-context.md` update automatically
 
 **Applying (SessionStart + every message)**
-5. SessionStart injects your `taste.md` rules + project `goal.md` + recent context
+5. SessionStart injects your `taste.md` rules + observation patterns + project `goal.md` + recent context
 6. UserPromptSubmit hook injects a thinking framework on every message — guiding AI to infer your *intent* (A), not just your *instruction* (C)
 7. Priority-based injection ensures the most important context always fits within budget
 
@@ -91,7 +91,7 @@ Session starts → Load taste.md + goal.md + context.md → AI starts informed
 ### Prerequisites
 
 - [Claude Code](https://code.claude.com/) installed
-- `ANTHROPIC_API_KEY` environment variable set
+- An LLM provider configured (see [Providers](#providers) below)
 
 ### Install
 
@@ -125,8 +125,9 @@ cd your-taste && npm install
 **your-taste never stores your code, business logic, or conversation content.**
 
 What IS stored (`~/.your-taste/`):
-- `profile.yaml` — 6 dimension scores, confidence levels, evidence counts
-- `taste.md` — Your behavioral rules and design philosophy in plain language
+- `observations.md` — Thinking patterns, behavioral patterns with context conditions, suggested rules (primary AI output)
+- `taste.md` — User-reviewed behavioral rules and design philosophy in plain language
+- `profile.yaml` — Optional dimension scores for display
 - `global-context.md` — Cross-project focus topics (what you're working on across projects)
 - `projects/<name>/goal.md` — Project vision and constraints (user-authored)
 - `projects/<name>/context.md` — Recent tactical decisions and open questions (auto-maintained)
@@ -137,19 +138,77 @@ What is NOT stored:
 - Credentials, API keys, PII
 - The conversation itself
 
-All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only abstract scores, behavioral rules, and strategic-level context come out.
+All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only narrative observations, behavioral rules, and strategic-level context come out.
 
 ## Configuration
 
 Everything lives in `~/.your-taste/`:
-- `profile.yaml` — dimension scores and confidence (machine-internal, human-readable)
+- `observations.md` — thinking patterns, behavioral patterns, suggested rules (AI-generated, human-readable)
 - `taste.md` — your behavioral rules and design philosophy (human-readable, editable)
-- `pending.yaml` — candidate rules awaiting review (machine-internal)
+- `profile.yaml` — optional dimension scores for display (machine-internal, human-readable)
 - `global-context.md` — cross-project focus tracking (human-readable, editable)
 - `projects/<name>/goal.md` — project vision and constraints (human-authored)
 - `projects/<name>/context.md` — recent decisions, open questions, last session (auto-maintained)
 
 Set `YOUR_TASTE_DIR` to change the storage location.
+
+## Providers
+
+your-taste needs an LLM to analyze your sessions. Set an environment variable and it auto-detects, or configure explicitly in `~/.your-taste/config.yaml`.
+
+### Auto-detection (zero config)
+
+Set any of these env vars — first one found wins:
+
+| Priority | Provider | Env Variable | Default Model |
+|----------|----------|-------------|---------------|
+| 1 | Anthropic | `ANTHROPIC_API_KEY` | claude-haiku-4-5 |
+| 2 | OpenAI | `OPENAI_API_KEY` | gpt-4o-mini |
+| 3 | DeepSeek | `DEEPSEEK_API_KEY` | deepseek-chat |
+| 4 | Gemini | `GEMINI_API_KEY` | gemini-2.0-flash |
+| 5 | Groq | `GROQ_API_KEY` | llama-3.3-70b-versatile |
+| 6 | Mistral | `MISTRAL_API_KEY` | mistral-small-latest |
+| 7 | OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-haiku |
+
+### Explicit config
+
+Create `~/.your-taste/config.yaml`:
+
+```yaml
+provider: deepseek
+apiKey: sk-...
+# model: deepseek-chat    # optional, overrides default
+# baseUrl: https://...    # optional, overrides default
+```
+
+### Claude Max Proxy (use your subscription, no API key)
+
+If you have a Claude Max/Pro subscription but no API key, [claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) wraps your Claude Code CLI as a local OpenAI-compatible API:
+
+```bash
+git clone https://github.com/atalovesyou/claude-max-api-proxy.git
+cd claude-max-api-proxy && npm install && npm run build
+node dist/server/standalone.js  # runs on localhost:3456
+```
+
+Then configure:
+
+```yaml
+provider: claude-max-proxy
+# model: claude-sonnet-4   # or claude-opus-4, claude-haiku-4
+```
+
+### Ollama (local models)
+
+```yaml
+provider: ollama
+model: llama3.2
+# baseUrl: http://localhost:11434/v1   # default
+```
+
+### No provider?
+
+Outside Claude Code, your-taste falls back to `claude -p` (Claude Code CLI). Inside Claude Code, you need one of the above configured.
 
 ## Roadmap
 

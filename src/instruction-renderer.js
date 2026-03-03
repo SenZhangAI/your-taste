@@ -1,5 +1,50 @@
 // src/instruction-renderer.js
 
+import { extractSection } from './observations.js';
+
+const OBSERVATIONS_HEADER = "Working context for this user (learned from past collaboration):";
+
+export function renderFromObservations(observationsMarkdown) {
+  if (!observationsMarkdown) return null;
+
+  const sections = [];
+
+  const thinkingHeaders = ['Thinking Patterns', '思维模式'];
+  // Try new header first, fall back to legacy — ensures old observations.md keeps working
+  const principlesHeaders = ['Working Principles', '工作原则', 'Behavioral Patterns', '行为模式'];
+  const misreadsHeaders = ['Common Misreads', '常见误读'];
+
+  let thinking = null;
+  for (const h of thinkingHeaders) {
+    thinking = extractSection(observationsMarkdown, h);
+    if (thinking) break;
+  }
+
+  let principles = null;
+  let principlesLabel = 'Working Principles';
+  for (const h of principlesHeaders) {
+    principles = extractSection(observationsMarkdown, h);
+    if (principles) {
+      principlesLabel = h;
+      break;
+    }
+  }
+
+  let misreads = null;
+  for (const h of misreadsHeaders) {
+    misreads = extractSection(observationsMarkdown, h);
+    if (misreads) break;
+  }
+
+  if (thinking) sections.push(`### Thinking Patterns\n\n${thinking}`);
+  if (principles) sections.push(`### ${principlesLabel}\n\n${principles}`);
+  if (misreads) sections.push(`### Common Misreads\n\n${misreads}`);
+
+  if (sections.length === 0) return null;
+
+  return `${OBSERVATIONS_HEADER}\n\n${sections.join('\n\n')}`;
+}
+
 const TEMPLATES = {
   risk_tolerance: {
     low: 'Prefer gradual migration over rewrites. Include rollback plans for production changes. Favor proven patterns over novel approaches.',

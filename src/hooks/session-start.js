@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readProfile } from '../profile.js';
-import { renderInstructions } from '../instruction-renderer.js';
+import { renderInstructions, renderFromObservations } from '../instruction-renderer.js';
+import { readObservations } from '../observations.js';
 import { readTasteFile } from '../taste-file.js';
 import { ensureProjectDir } from '../project.js';
 import { loadGoal, renderGoalForInjection } from '../goal.js';
@@ -9,7 +10,7 @@ import { debug } from '../debug.js';
 
 const QUALITY_FLOOR = 'Apply these preferences on top of professional best practices. Never compromise error handling at system boundaries, security best practices, or data integrity.';
 
-export function buildAdditionalContext(profile, tasteContent, goalContent, projectContextText) {
+export function buildAdditionalContext(profile, tasteContent, observationsContent, goalContent, projectContextText) {
   let base;
   if (tasteContent) {
     base = `${tasteContent}\n\n${QUALITY_FLOOR}`;
@@ -17,9 +18,10 @@ export function buildAdditionalContext(profile, tasteContent, goalContent, proje
     base = renderInstructions(profile);
   }
 
+  const observationsRendered = renderFromObservations(observationsContent);
   const goalText = renderGoalForInjection(goalContent);
 
-  const sections = [base, goalText, projectContextText].filter(Boolean);
+  const sections = [base, observationsRendered, goalText, projectContextText].filter(Boolean);
   if (sections.length === 0) return null;
   return sections.join('\n\n');
 }
@@ -35,7 +37,9 @@ async function main() {
   const activeDims = Object.values(profile.dimensions).filter(d => d.confidence > 0.3);
   const tasteContent = await readTasteFile();
   const hasTaste = !!tasteContent;
-  debug(`session-start: profile=${activeDims.length} dims, taste.md=${hasTaste}`);
+  const observationsContent = await readObservations();
+  const hasObservations = !!observationsContent;
+  debug(`session-start: profile=${activeDims.length} dims, taste.md=${hasTaste}, observations=${hasObservations}`);
 
   // Load project-scoped data
   let goalContent = null;
@@ -54,12 +58,12 @@ async function main() {
   const hasProjectCtx = !!projectContextText;
   debug(`session-start: goal=${hasGoal}, projectCtx=${hasProjectCtx}`);
 
-  if (activeDims.length === 0 && !hasTaste && !hasGoal && !hasProjectCtx) {
+  if (activeDims.length === 0 && !hasTaste && !hasObservations && !hasGoal && !hasProjectCtx) {
     debug('session-start: no data to inject, exiting');
     process.exit(0);
   }
 
-  const additionalContext = buildAdditionalContext(profile, tasteContent, goalContent, projectContextText);
+  const additionalContext = buildAdditionalContext(profile, tasteContent, observationsContent, goalContent, projectContextText);
 
   const parts = [];
   if (hasTaste) {
@@ -67,6 +71,7 @@ async function main() {
   } else if (activeDims.length > 0) {
     parts.push(`${activeDims.length} dimensions`);
   }
+  if (hasObservations) parts.push('observations');
   if (hasGoal) parts.push('goal');
   if (hasProjectCtx) parts.push('project context');
 

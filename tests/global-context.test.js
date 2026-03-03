@@ -74,13 +74,13 @@ describe('global context (Markdown)', () => {
   it('renders for injection', async () => {
     await updateGlobalContext(['project A work']);
     const ctx = await loadGlobalContext();
-    const rendered = renderGlobalContext(ctx);
+    const rendered = await renderGlobalContext(ctx);
     expect(rendered).toContain('Cross-Project Focus');
     expect(rendered).toContain('project A work');
   });
 
   it('returns null when empty', async () => {
     const ctx = await loadGlobalContext();
-    expect(renderGlobalContext(ctx)).toBeNull();
+    expect(await renderGlobalContext(ctx)).toBeNull();
   });
 });

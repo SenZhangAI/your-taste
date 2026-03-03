@@ -32,6 +32,11 @@ Score each on 0.0-1.0 scale:
 
 {{DIMENSIONS}}
 
+## Language
+
+Write ALL text fields (evidence, summary, session_context, candidate_rules) in the SAME language as the conversation transcript. Do NOT translate — preserve the original language to avoid meaning distortion.
+Only enum/structural fields (dimension, direction, session_quality) stay in English.
+
 ## Preference Signal Instructions
 
 1. Find moments where the AI proposed something and the user reacted (accepted, modified, rejected, or requested something different)
@@ -56,10 +61,15 @@ Rules should be:
 - Short, actionable statements ("X over Y", "Always X", "Never Y")
 - Abstract — no business details, code snippets, or names
 - Genuinely instructive — useful for guiding AI behavior in future sessions
+- **Stable preferences, NOT situational actions.** A one-time behavior driven by immediate context (rushing to test, skipping steps for expediency, working around a tool limitation) is NOT a stable preference. Only extract patterns that reflect the user's values or consistent decision-making approach.
 
-Only extract rules the user strongly or repeatedly demonstrates. Not every preference becomes a rule. Quality over quantity — 0-3 rules per session is typical.
+Only extract rules the user strongly or repeatedly demonstrates. Not every preference becomes a rule. Quality over quantity — 0-2 rules per session is typical. Most sessions yield 0 rules.
+
+Each rule MUST include a brief evidence note explaining what behavior demonstrated this preference.
 
 {{PENDING_RULES}}
+
+{{LANGUAGE}}
 
 ## Output Format
 
@@ -81,7 +91,7 @@ You MUST return ONLY a JSON object. No text before or after. No markdown fencing
     }
   ],
   "candidate_rules": [
-    "Clean breaks over gradual migration"
+    { "text": "Clean breaks over gradual migration", "evidence": "Chose full rewrite over incremental refactoring despite higher short-term risk" }
   ],
   "session_quality": "high|medium|low|none"
 }

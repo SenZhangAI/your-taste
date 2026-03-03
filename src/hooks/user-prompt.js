@@ -38,7 +38,7 @@ export async function buildUserPromptContext(projectDir) {
   let globalCtxText = null;
   try {
     const globalCtx = await loadGlobalContext();
-    globalCtxText = renderGlobalContext(globalCtx);
+    globalCtxText = await renderGlobalContext(globalCtx);
   } catch { /* no global context */ }
 
   // Priority-based assembly (lower number = higher priority):

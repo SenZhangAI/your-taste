@@ -7,21 +7,21 @@ describe('session-start output format', () => {
     const profile = createDefaultProfile();
     profile.dimensions.risk_tolerance.score = 0.8;
     profile.dimensions.risk_tolerance.confidence = 0.6;
-    const result = buildAdditionalContext(profile, null, null, null);
+    const result = buildAdditionalContext(profile, null, null, null, null);
     expect(result).toContain('rewrite');
   });
 
   it('uses taste.md content when available', () => {
     const profile = createDefaultProfile();
     const tasteContent = '# Your Taste\n\n- Custom rule one\n- Custom rule two\n';
-    const result = buildAdditionalContext(profile, tasteContent, null, null);
+    const result = buildAdditionalContext(profile, tasteContent, null, null, null);
     expect(result).toContain('Custom rule one');
     expect(result).toContain('error handling');
   });
 
   it('returns null when no instructions and no taste.md', () => {
     const profile = createDefaultProfile();
-    const result = buildAdditionalContext(profile, null, null, null);
+    const result = buildAdditionalContext(profile, null, null, null, null);
     expect(result).toBeNull();
   });
 
@@ -30,7 +30,7 @@ describe('session-start output format', () => {
     profile.dimensions.risk_tolerance.score = 0.8;
     profile.dimensions.risk_tolerance.confidence = 0.6;
     const goalContent = '# Project Goal\n\n## What\nA test plugin';
-    const result = buildAdditionalContext(profile, null, goalContent, null);
+    const result = buildAdditionalContext(profile, null, null, goalContent, null);
     expect(result).toContain('rewrite');
     expect(result).toContain('A test plugin');
   });
@@ -40,7 +40,7 @@ describe('session-start output format', () => {
     profile.dimensions.risk_tolerance.score = 0.8;
     profile.dimensions.risk_tolerance.confidence = 0.6;
     const ctxText = '## Project Context\n\n### Recent Decisions\n- test decision';
-    const result = buildAdditionalContext(profile, null, null, ctxText);
+    const result = buildAdditionalContext(profile, null, null, null, ctxText);
     expect(result).toContain('rewrite');
     expect(result).toContain('test decision');
   });
