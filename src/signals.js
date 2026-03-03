@@ -1,4 +1,4 @@
-import { readFile, appendFile, writeFile, rename, mkdir } from 'fs/promises';
+import { readFile, appendFile, writeFile, unlink, rename, mkdir } from 'fs/promises';
 import { debug } from './debug.js';
 
 function getDir() {
@@ -87,13 +87,25 @@ export function collectForSynthesis(entries) {
  */
 export async function clearSignals() {
   const src = getSignalsPath();
-  const historyDir = `${getDir()}/history`;
-  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  const dest = `${historyDir}/init-signals-${ts}.jsonl`;
   try {
-    await mkdir(historyDir, { recursive: true });
-    await rename(src, dest);
-    debug(`signals: archived → ${dest}`);
+    const content = await readFile(src, 'utf8');
+    // Filter out empty entries (processed but yielded no decision points)
+    const meaningful = content.split('\n').filter(line => {
+      if (!line.trim()) return false;
+      try { return JSON.parse(line).decision_points?.length > 0; }
+      catch { return false; }
+    });
+
+    if (meaningful.length > 0) {
+      const historyDir = `${getDir()}/history`;
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const dest = `${historyDir}/init-signals-${ts}.jsonl`;
+      await mkdir(historyDir, { recursive: true });
+      await writeFile(dest, meaningful.join('\n') + '\n', 'utf8');
+      debug(`signals: archived ${meaningful.length} entries → ${dest}`);
+    }
+
+    await unlink(src);
   } catch {
     // already gone
   }
