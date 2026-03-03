@@ -205,9 +205,16 @@ async function readSSEStream(body, signal) {
 
 const activeProcs = new Set();
 
+function forceKill(proc) {
+  try { proc.stdin?.destroy(); } catch {}
+  try { proc.stdout?.destroy(); } catch {}
+  try { proc.stderr?.destroy(); } catch {}
+  try { proc.kill('SIGKILL'); } catch {}
+}
+
 function killAllChildren() {
   for (const proc of activeProcs) {
-    try { proc.kill('SIGTERM'); } catch {}
+    forceKill(proc);
   }
   activeProcs.clear();
 }
@@ -232,10 +239,22 @@ function completeCLI(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     let stderr = '';
     let killed = false;
 
+    let settled = false;
+    const settle = (fn) => { if (!settled) { settled = true; fn(); } };
+
     const timer = setTimeout(() => {
       killed = true;
       proc.kill('SIGTERM');
-      debug('llm: killed after timeout (CLI)');
+      debug('llm: SIGTERM after timeout (CLI)');
+      // SIGKILL 兜底：SIGTERM 5s 后强杀
+      setTimeout(() => {
+        if (activeProcs.has(proc)) {
+          debug('llm: SIGKILL escalation (CLI)');
+          forceKill(proc);
+          activeProcs.delete(proc);
+          settle(() => reject(new Error(`claude timed out after ${timeoutMs / 1000}s (force killed)`)));
+        }
+      }, 5000);
     }, timeoutMs);
 
     proc.stdout.on('data', (d) => (stdout += d));
@@ -246,19 +265,24 @@ function completeCLI(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
       activeProcs.delete(proc);
       debug(`llm: spawn error: ${err.message}`);
       if (err.code === 'ENOENT') {
-        reject(new Error('claude CLI not found. Is Claude Code installed?'));
+        settle(() => reject(new Error('claude CLI not found. Is Claude Code installed?')));
       } else {
-        reject(err);
+        settle(() => reject(err));
       }
     });
 
-    proc.on('close', (code) => {
+    // 用 exit 而非 close — close 依赖 stdio 关闭，进程挂起时可能永远不触发
+    proc.on('exit', (code) => {
       clearTimeout(timer);
       activeProcs.delete(proc);
+      // 销毁 stdio 防止 pipe 保持进程引用
+      try { proc.stdin?.destroy(); } catch {}
+      try { proc.stdout?.destroy(); } catch {}
+      try { proc.stderr?.destroy(); } catch {}
       debug(`llm: CLI exit code=${code}, stdout=${stdout.length} chars`);
-      if (killed) reject(new Error(`claude timed out after ${timeoutMs / 1000}s`));
-      else if (code !== 0) reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`));
-      else resolve(stdout);
+      if (killed) settle(() => reject(new Error(`claude timed out after ${timeoutMs / 1000}s`)));
+      else if (code !== 0) settle(() => reject(new Error(`claude exited with code ${code}: ${stderr.trim()}`)));
+      else settle(() => resolve(stdout));
     });
 
     proc.stdin.write(prompt);
