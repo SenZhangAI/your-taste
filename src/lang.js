@@ -91,7 +91,9 @@ const TEMPLATES = {
     // observations.js
     thinkingPatternsHeader: 'Thinking Patterns',
     behavioralPatternsHeader: 'Behavioral Patterns',
+    workingPrinciplesHeader: 'Working Principles',
     suggestedRulesHeader: 'Suggested Rules',
+    commonMisreadsHeader: 'Common Misreads',
   },
   zh: {
     tasteHeader: '# 你的品味',
@@ -112,7 +114,9 @@ const TEMPLATES = {
     contextLastSession: '## 上次会话',
     thinkingPatternsHeader: '思维模式',
     behavioralPatternsHeader: '行为模式',
+    workingPrinciplesHeader: '工作原则',
     suggestedRulesHeader: '建议规则',
+    commonMisreadsHeader: '常见误读',
   },
   ja: {
     tasteHeader: '# あなたのテイスト',
@@ -133,7 +137,9 @@ const TEMPLATES = {
     contextLastSession: '## 前回のセッション',
     thinkingPatternsHeader: 'Thinking Patterns',
     behavioralPatternsHeader: 'Behavioral Patterns',
+    workingPrinciplesHeader: 'Working Principles',
     suggestedRulesHeader: 'Suggested Rules',
+    commonMisreadsHeader: 'Common Misreads',
   },
 };
 

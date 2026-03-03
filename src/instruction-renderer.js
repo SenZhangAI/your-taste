@@ -2,7 +2,7 @@
 
 import { extractSection } from './observations.js';
 
-const OBSERVATIONS_HEADER = "The user's cognitive and behavioral patterns (learned from past sessions):";
+const OBSERVATIONS_HEADER = "Working context for this user (learned from past collaboration):";
 
 export function renderFromObservations(observationsMarkdown) {
   if (!observationsMarkdown) return null;
@@ -10,7 +10,9 @@ export function renderFromObservations(observationsMarkdown) {
   const sections = [];
 
   const thinkingHeaders = ['Thinking Patterns', '思维模式'];
-  const behavioralHeaders = ['Behavioral Patterns', '行为模式'];
+  // Try new header first, fall back to legacy — ensures old observations.md keeps working
+  const principlesHeaders = ['Working Principles', '工作原则', 'Behavioral Patterns', '行为模式'];
+  const misreadsHeaders = ['Common Misreads', '常见误读'];
 
   let thinking = null;
   for (const h of thinkingHeaders) {
@@ -18,14 +20,25 @@ export function renderFromObservations(observationsMarkdown) {
     if (thinking) break;
   }
 
-  let behavioral = null;
-  for (const h of behavioralHeaders) {
-    behavioral = extractSection(observationsMarkdown, h);
-    if (behavioral) break;
+  let principles = null;
+  let principlesLabel = 'Working Principles';
+  for (const h of principlesHeaders) {
+    principles = extractSection(observationsMarkdown, h);
+    if (principles) {
+      principlesLabel = h;
+      break;
+    }
   }
 
-  if (thinking) sections.push(thinking);
-  if (behavioral) sections.push(behavioral);
+  let misreads = null;
+  for (const h of misreadsHeaders) {
+    misreads = extractSection(observationsMarkdown, h);
+    if (misreads) break;
+  }
+
+  if (thinking) sections.push(`### Thinking Patterns\n\n${thinking}`);
+  if (principles) sections.push(`### ${principlesLabel}\n\n${principles}`);
+  if (misreads) sections.push(`### Common Misreads\n\n${misreads}`);
 
   if (sections.length === 0) return null;
 

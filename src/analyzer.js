@@ -31,7 +31,7 @@ const DATA_SEPARATORS = [
   '## Decision Points',          // synthesize-profile prompt
 ];
 
-async function callLLM(promptTemplate, replacements, { timeoutMs } = {}) {
+async function callLLM(promptTemplate, replacements, { timeoutMs, model } = {}) {
   let prompt = promptTemplate;
   for (const [key, value] of Object.entries(replacements)) {
     prompt = prompt.replace(`{{${key}}}`, value);
@@ -52,7 +52,7 @@ async function callLLM(promptTemplate, replacements, { timeoutMs } = {}) {
   }
 
   debug(`analyzer: sending prompt (${prompt.length} chars) to LLM`);
-  const response = await complete(userContent, { systemPrompt, timeoutMs });
+  const response = await complete(userContent, { systemPrompt, timeoutMs, model });
   debug(`analyzer: raw response (${response.length} chars): ${response.slice(0, 500)}${response.length > 500 ? '...' : ''}`);
   return response;
 }
@@ -77,7 +77,7 @@ export async function extractSignals(conversationText) {
 
 // --- Pass 2: Synthesize profile from accumulated signals ---
 
-export async function synthesizeProfile(decisionPoints, existingObservations = null, tasteRuleTexts = []) {
+export async function synthesizeProfile(decisionPoints, existingObservations = null, tasteRuleTexts = [], model = null) {
   const promptTemplate = await readFile(
     new URL('../prompts/synthesize-profile.md', import.meta.url),
     'utf8',
@@ -100,16 +100,18 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
     ? `## Existing taste.md Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
     : '';
 
-  // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points
+  // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points.
+  // 360s timeout accounts for the 4th section (Common Misreads) adding ~20% output.
   const response = await callLLM(promptTemplate, {
     THINKING_PATTERNS_HEADER: t.thinkingPatternsHeader || 'Thinking Patterns',
-    BEHAVIORAL_PATTERNS_HEADER: t.behavioralPatternsHeader || 'Behavioral Patterns',
+    WORKING_PRINCIPLES_HEADER: t.workingPrinciplesHeader || 'Working Principles',
     SUGGESTED_RULES_HEADER: t.suggestedRulesHeader || 'Suggested Rules',
+    COMMON_MISREADS_HEADER: t.commonMisreadsHeader || 'Common Misreads',
     EXISTING_OBSERVATIONS: existingSection,
     TASTE_RULES: tasteSection,
     LANGUAGE: buildLanguageInstruction(lang),
     SIGNALS: signalsText,
-  }, { timeoutMs: 300_000 });
+  }, { timeoutMs: 360_000, model });
 
   const result = parseSynthesisResponse(response);
   debug(`synthesize: produced ${result.length} chars of observations markdown`);

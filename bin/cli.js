@@ -4,11 +4,13 @@ import { readProfile } from '../src/profile.js';
 import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
 import { readPending, removePendingRules } from '../src/pending.js';
 import { readTasteFile, appendRules } from '../src/taste-file.js';
-import { readObservations } from '../src/observations.js';
+import { readObservations, writeObservations } from '../src/observations.js';
 import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
+import { synthesizeProfile } from '../src/analyzer.js';
+import { collectForSynthesis } from '../src/signals.js';
 import { debug, isDebug, FLAG_PATH, LOG_PATH } from '../src/debug.js';
 import { readLang, writeLang, hasLangFile, languageName } from '../src/lang.js';
 import { writeFile, rm, mkdir, readFile as fsReadFile, stat as fsStat } from 'fs/promises';
@@ -38,6 +40,8 @@ if (command === 'init') {
   await runGoal();
 } else if (command === 'lang') {
   await runLang();
+} else if (command === 'synthesize') {
+  await runSynthesize();
 } else if (command === 'debug') {
   await runDebug();
 } else {
@@ -48,6 +52,10 @@ if (command === 'init') {
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
   console.log('  show              Display your taste profile');
+  console.log('  synthesize        Re-run Stage 2 synthesis from existing signals');
+  console.log('    --dry-run       Output to stdout instead of writing observations.md');
+  console.log('    --signals <p>   Use specific signals file');
+  console.log('    --model <m>     Override model for synthesis');
   console.log('  status            Show what your-taste knows about you and this project');
   console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
@@ -321,6 +329,89 @@ async function runLang() {
   }
   await writeLang(code);
   console.log(`Language set to: ${code} (${languageName(code)})`);
+}
+
+function parseSynthesizeFlags() {
+  const args = process.argv.slice(3);
+  const flags = { dryRun: false, signals: null, model: null };
+
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--dry-run') {
+      flags.dryRun = true;
+    } else if (args[i] === '--signals' && args[i + 1]) {
+      flags.signals = args[++i];
+    } else if (args[i] === '--model' && args[i + 1]) {
+      flags.model = args[++i];
+    }
+  }
+
+  return flags;
+}
+
+async function runSynthesize() {
+  const flags = parseSynthesizeFlags();
+  const tasteDir = process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+
+  // Resolve signals file path: explicit flag > default > .bak fallback
+  let signalsPath = flags.signals;
+  if (!signalsPath) {
+    const defaultPath = `${tasteDir}/init-signals.jsonl`;
+    const bakPath = `${defaultPath}.bak`;
+    try {
+      await fsStat(defaultPath);
+      signalsPath = defaultPath;
+    } catch {
+      try {
+        await fsStat(bakPath);
+        signalsPath = bakPath;
+        console.log(`Using backup signals: ${bakPath}`);
+      } catch {
+        console.error('No signals file found. Run `taste init` first, or specify --signals <path>.');
+        process.exit(1);
+      }
+    }
+  }
+
+  // Read and parse signals
+  let entries;
+  try {
+    const content = await fsReadFile(signalsPath, 'utf8');
+    entries = content.split('\n')
+      .filter(line => line.trim())
+      .map(line => JSON.parse(line));
+  } catch (err) {
+    console.error(`Failed to read signals: ${err.message}`);
+    process.exit(1);
+  }
+
+  const decisionPoints = collectForSynthesis(entries);
+  if (decisionPoints.length === 0) {
+    console.log('No decision points found in signals file.');
+    process.exit(0);
+  }
+
+  console.log(`Synthesizing from ${decisionPoints.length} decision points...`);
+
+  const existingObservations = await readObservations();
+  const tasteContent = await readTasteFile();
+  const tasteRules = tasteContent
+    ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
+    : [];
+
+  try {
+    const result = await synthesizeProfile(decisionPoints, existingObservations, tasteRules, flags.model);
+
+    if (flags.dryRun) {
+      console.log('\n--- observations.md (dry run) ---\n');
+      console.log(result);
+    } else {
+      await writeObservations(result);
+      console.log(`\nWrote observations.md (${result.length} chars)`);
+    }
+  } catch (err) {
+    console.error(`Synthesis failed: ${err.message}`);
+    process.exit(1);
+  }
 }
 
 async function runDebug() {

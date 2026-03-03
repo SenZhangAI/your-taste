@@ -9,7 +9,7 @@ import { readObservations, writeObservations } from './observations.js';
 import { readTasteFile } from './taste-file.js';
 import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from './signals.js';
 import { hasLangFile, writeLang } from './lang.js';
-import { META_MARKER } from './llm.js';
+import { META_MARKER, loadConfig } from './llm.js';
 import { debug } from './debug.js';
 
 const DEFAULT_MAX_SESSIONS = 50;
@@ -244,7 +244,7 @@ async function pass1Session(transcriptPath) {
  * Fail-fast: aborts Pass 1 after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
  */
 export async function backfill(projectsDir, options = {}) {
-  const { onProgress, filter, currentProjectPath } = options;
+  const { onProgress, filter, currentProjectPath, model: overrideModel } = options;
 
   // Discover all candidates (noCap) so the session cap applies AFTER filtering out
   // already-processed sessions. Without this, repeated runs stall: the same N newest
@@ -338,6 +338,11 @@ export async function backfill(projectsDir, options = {}) {
     ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
     : [];
 
+  // Resolve synthesis model: CLI override > config.synthesisModel > default
+  const config = await loadConfig();
+  const synthesisModel = overrideModel || config?.synthesisModel || null;
+  if (synthesisModel) debug(`backfill: using synthesis model override: ${synthesisModel}`);
+
   // Retry with fewer decision points on timeout — strongest signals are sorted first,
   // so halving always preserves the highest-value data.
   const MIN_DPS_FOR_RETRY = 5;
@@ -347,7 +352,7 @@ export async function backfill(projectsDir, options = {}) {
   while (dpsToUse.length >= MIN_DPS_FOR_RETRY) {
     debug(`backfill: Pass 2 — synthesizing ${dpsToUse.length} decision points from ${entries.length} sessions`);
     try {
-      observationsMarkdown = await synthesizeProfile(dpsToUse, existingObservations, tasteRules);
+      observationsMarkdown = await synthesizeProfile(dpsToUse, existingObservations, tasteRules, synthesisModel);
       break;
     } catch (err) {
       if (!isTimeoutError(err) || dpsToUse.length <= MIN_DPS_FOR_RETRY) {

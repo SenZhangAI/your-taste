@@ -268,7 +268,7 @@ function completeCLI(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 
 // --- Main Entry ---
 
-export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS, systemPrompt = null } = {}) {
+export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS, systemPrompt = null, model = null } = {}) {
   const markedPrompt = `${META_MARKER}\n${prompt}`;
   debug(`llm: prompt length=${markedPrompt.length} chars${systemPrompt ? `, system=${systemPrompt.length} chars` : ''}`);
 
@@ -276,13 +276,14 @@ export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS, systemP
   const provider = resolveProvider(config);
 
   if (provider) {
-    debug(`llm: using ${provider.name} (${provider.model})`);
+    const activeModel = model || provider.model;
+    debug(`llm: using ${provider.name} (${activeModel}${model ? ' [override]' : ''})`);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const call = provider.apiFormat === 'anthropic-messages' ? callAnthropic : callOpenAI;
-      const result = await call(provider.baseUrl, provider.apiKey, provider.model, systemPrompt, markedPrompt, controller.signal);
+      const result = await call(provider.baseUrl, provider.apiKey, activeModel, systemPrompt, markedPrompt, controller.signal);
       return result;
     } catch (err) {
       if (err.name === 'AbortError') {
