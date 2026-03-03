@@ -1,4 +1,4 @@
-import { readFile, appendFile, writeFile, unlink, mkdir } from 'fs/promises';
+import { readFile, appendFile, writeFile, rename, mkdir } from 'fs/promises';
 import { debug } from './debug.js';
 
 function getDir() {
@@ -82,12 +82,18 @@ export function collectForSynthesis(entries) {
 }
 
 /**
- * Clear the intermediate signals file after successful Pass 2.
+ * Archive the signals file after successful Pass 2.
+ * Moves to history/init-signals-{timestamp}.jsonl for future reference.
  */
 export async function clearSignals() {
+  const src = getSignalsPath();
+  const historyDir = `${getDir()}/history`;
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const dest = `${historyDir}/init-signals-${ts}.jsonl`;
   try {
-    await unlink(getSignalsPath());
-    debug('signals: cleared init-signals.jsonl');
+    await mkdir(historyDir, { recursive: true });
+    await rename(src, dest);
+    debug(`signals: archived → ${dest}`);
   } catch {
     // already gone
   }
