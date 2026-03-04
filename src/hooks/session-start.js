@@ -51,6 +51,7 @@ async function main() {
 
   if (!hasObservations && !hasProjectCtx && !hasProposals) {
     debug('session-start: no data to inject, exiting');
+    console.log(JSON.stringify({ result: 'your-taste: no data yet' }));
     process.exit(0);
   }
 
@@ -76,5 +77,6 @@ async function main() {
 
 main().catch((e) => {
   debug(`session-start: fatal error — ${e.message}\n${e.stack}`);
+  console.log(JSON.stringify({ result: `your-taste: startup error — ${e.message}` }));
   process.exit(0);
 });

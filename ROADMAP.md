@@ -1,70 +1,37 @@
 # Roadmap
 
-## Design Principles
+## Current: v1.0 — Thinking Quality Optimizer
 
-1. **The gap isn't intelligence — it's context.** AI models are extraordinarily capable, but capability without context produces generic output. The bottleneck is that AI doesn't know you — your thinking patterns, your current focus, your past decisions.
+your-taste detects reasoning gaps in AI sessions and synthesizes a thinking framework that prevents the same mistakes. The framework has three sections:
 
-2. **Infer A, not C.** Users think A → B → C then say C. A great collaborator traces back to A — the underlying principle — and works forward from there. Surface behavior can mislead about motivation; always extract the WHY, not just the WHAT.
+1. **Reasoning Checkpoints** — Verification steps before acting
+2. **Domain Reasoning** — Context-specific thinking rules
+3. **Failure Patterns** — Recurring reasoning errors with root causes
 
-3. **Taste ≠ Skill.** We learn your *direction* (cautious vs bold, minimal vs comprehensive), not your *ability*. Your taste sets direction; professional quality is non-negotiable.
-
-4. **Behavior > Declaration (with limits).** We learn from what you *do*, not what you *say*. But behavior has a fidelity boundary: observing *what* doesn't always reveal *why*. That's why the system also infers the underlying principles behind your actions.
-
----
-
-## Current State (v0.4.0)
-
-your-taste is a **context accelerator** — it reduces the information gap between you and AI through three layers:
-
-### Observation-Based Learning
-- **Two-pass analysis pipeline**: Stage 1 extracts decision points per session, Stage 2 synthesizes narrative `observations.md`
-- **observations.md** four-section structure: Thinking Patterns (cognitive models), Working Principles (context-dependent preferences with motivation), Suggested Rules (review candidates), Common Misreads (AI error prevention)
-- **proposals.jsonl** stages rule suggestions from both `taste init` and SessionEnd for user review
-- **CLAUDE.md managed section** (`<!-- your-taste:start/end -->`) stores user-confirmed behavioral rules, consumed natively by Claude Code
-
-### Project-Scoped Context
-- **`context.md`** — Recent tactical decisions (FIFO 10), open questions, last session summary (auto-maintained)
-- **`global-context.md`** — Cross-project focus tracking (max 5 topics, 30-day TTL decay)
-- Project isolation via `~/.your-taste/projects/<name>/` directories
-
-### Three-Layer Injection
-- **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
-- **SessionStart** (once per session) — Working Principles + Common Misreads from observations, project context, proposals notification
-- **UserPromptSubmit** (every message) — Thinking framework + personalized thinking patterns + project context + global focus (4KB budget, priority-based)
+Five gap categories: `verification_skip`, `breadth_miss`, `depth_skip`, `assumption_leak`, `overreach`.
 
 ### Infrastructure
-- Multi-provider LLM support (Anthropic, OpenAI, DeepSeek, Gemini, Groq, Mistral, OpenRouter, Ollama, claude-max-proxy)
-- Privacy filter strips all PII before LLM analysis
-- `taste init` backfill from conversation history — instant observations in seconds
-- `taste review` for approving rule proposals into CLAUDE.md
-- Debug mode (`taste debug on/off/log`) for troubleshooting
-- 150 tests across 18 test files
+- Multi-provider LLM (Anthropic, OpenAI, DeepSeek, Gemini, Groq, Mistral, OpenRouter, Ollama, claude-max-proxy)
+- Three-layer injection (CLAUDE.md rules, SessionStart domain context, UserPromptSubmit checkpoints)
+- Privacy filter strips PII before analysis
+- `taste init` for instant framework from history, `taste review` for rule proposals
 
 ---
 
-## Next: Polish & Validate
+## Next: Sharpen
 
-Focus on proving the context accelerator value before expanding scope.
+- **Better A-to-C inference** — Improve extraction of missing reasoning steps vs surface preferences
+- **Evidence decay** — Reduce weight of old evidence, strengthen recent patterns
+- **Framework quality metrics** — Measure whether injected checkpoints actually prevent repeat mistakes
 
-- **A→C inference few-shot examples** — Improve extraction of underlying principles, not surface behavior
-- **Design principles auto-extraction** — Detect project-level design statements → proposals.jsonl (scope=design) → CLAUDE.md managed section
-- **Taste-aware thinking instructions** — Personalize the thinking framework based on observations
+## Later: Expand
 
-## Later: Growth
-
-- **Taste cards** — Shareable profile visualization + personality narratives
-- **Community launch** — Show HN, r/ClaudeAI, awesome-claude-code
+- **Cross-platform support** — Cursor, Codex, Copilot adapters
+- **Team reasoning profiles** — Composite frameworks from team correction patterns
 - **npm publish** — Official package release
-
-## Future: Cross-Platform
-
-- Multi-source adapters (Cursor, Codex, Copilot, OpenClaw)
-- Evidence-based sync (append-only evidence log, CRDT-native merge)
-- Team profiles — composite team preference profiles
-- Dynamic dimension discovery
 
 ---
 
 ## Contributing
 
-See [README.md](README.md) for setup instructions. Open issues describing the user problem, not just the solution.
+See [README.md](README.md) for setup. Open issues describing the user problem, not just the solution.

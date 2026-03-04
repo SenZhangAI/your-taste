@@ -1,48 +1,54 @@
 # Your Taste
 
+## Product Direction — Decision Anchor
+
+**Core metric: does this make AI smarter?** Every product decision, feature design, and architectural choice must be evaluated against this single question. If it doesn't make AI reasoning better, it doesn't ship.
+
+Three pillars:
+1. **Practical** — measurable improvement in AI reasoning quality, not theoretical elegance
+2. **Continuously evolving** — each session's corrections permanently upgrade the thinking framework, not just fix one instance
+3. **User value** — the user feels AI getting smarter over time, not just "personalized"
+
+Preferences are secondary. Knowing the user wants speed doesn't make AI think better — it just adjusts direction. Thinking quality is the foundation; preferences are calibration on top.
+
 ## Core Purpose
 
-Your-taste is a **context accelerator**, not just a preference tracker. The goal is not "understand the user" as an end — it's to **reduce the information gap between user and AI**, enabling faster autonomous collaboration.
+Your-taste captures **AI reasoning failures** from collaboration and evolves a thinking framework that prevents them. The user's corrections are training signals — each one should permanently upgrade how AI reasons in this problem domain.
 
-Understanding taste is one means. The full picture includes:
-- **Direction preferences** (cautious vs bold, minimal vs comprehensive)
-- **Decision principles** (concrete rules extracted from repeated behavior)
-- **Strategic context** (what the user is focused on, what was already decided)
-- **Thinking patterns** (how users reason, so AI can predict intent)
+**Old framing (deprecated):** "Learn user preferences → personalize AI behavior"
+**Current framing:** "Capture reasoning breakdowns → evolve AI thinking quality"
 
-## Architecture: Observations-Based Learning
+## Architecture: Reasoning Gap Learning
 
 ### Data Flow
-1. **taste init** (batch) — two-pass pipeline: extract decision points → synthesize observations.md
-2. **SessionEnd** (incremental) — single-pass: extract strong signals → proposals.jsonl
-3. **taste review** — user confirms proposals → writes to CLAUDE.md managed section
+1. **taste init** (batch) — two-pass pipeline: extract reasoning gaps → synthesize thinking framework
+2. **SessionEnd** (incremental) — extract reasoning gaps → accumulate signals
+3. **Synthesis trigger** — after N new sessions, re-synthesize the evolved thinking framework
 
 ### Core Files
-- **observations.md** — AI's working draft. Four sections:
-  - Thinking Patterns — how the user reasons (abstract-first, traces full paths, etc.)
-  - Working Principles — preferences with context conditions and motivation
-  - Suggested Rules — candidate rules for review
-  - Common Misreads — patterns AI gets wrong
-- **proposals.jsonl** — pending rule suggestions awaiting user review
+- **observations.md** — the evolved thinking framework. Three sections:
+  - Reasoning Checkpoints — verification steps AI must take before acting (auto-evolving)
+  - Domain Reasoning — how to reason correctly in specific problem domains (needs review)
+  - Failure Patterns — AI's recurring reasoning errors to prevent (auto-evolving)
+- **signals.jsonl** — accumulated reasoning gap data from sessions
 - **CLAUDE.md** (`<!-- your-taste:start/end -->`) — user-confirmed behavioral rules, consumed natively by Claude Code
 
 ### Three-Layer Injection
 1. **CLAUDE.md** (native) — confirmed rules, read by Claude Code without hooks
-2. **SessionStart** (once) — Working Principles + Common Misreads from observations, project context
-3. **UserPromptSubmit** (every message) — thinking-framework.md + personalized Thinking Patterns + project context
+2. **SessionStart** (once) — Domain Reasoning + Failure Patterns from observations
+3. **UserPromptSubmit** (every message) — Reasoning Checkpoints (evolved, replaces static thinking-framework.md when mature)
 
-### How to Apply Observations
-
-Observations capture DIRECTION and REASONING STYLE, not skill level. Two rules:
-
-1. **Match their direction** — if they prefer cautious approaches, favor gradual migrations. If they prefer minimal code, avoid over-abstraction.
-
-2. **Exceed their skill level** — always execute at professional best-practice quality. A "cautious" user gets expert-level caution (migration strategies, canary deploys), not amateur caution (try-catch everywhere).
+### Evolution Mechanism (Hybrid)
+- **Reasoning Checkpoints** + **Failure Patterns**: auto-evolve (low risk, purely additive)
+- **Domain Reasoning**: needs user review before activation (high impact, could change behavior direction)
+- **thinking-framework.md**: bootstrap template for cold start, replaced by observations.md content once 3+ checkpoints accumulated
 
 ## Critical Design Constraint: Infer A, Not C
 
-Users think A → B → C then say C. When extracting preferences from behavior:
-- **Extract the underlying principle (A)**, not the surface action (C)
-- Example: user gives specific numeric counterexample → A is "systematic thinker who traces full paths", NOT "prefers concrete over abstract"
-- Behavioral signals reveal direction but can mislead about motivation
-- The extract prompt must always ask WHY, not just WHAT
+Users think A → B → C then say C. When extracting reasoning gaps:
+- **Extract the missing reasoning step**, not the surface correction
+- Example: user corrects a join query → the gap is NOT "user prefers verified joins" → the gap IS "AI skipped FK validation before writing code"
+- The extract prompt must ask: what step did AI skip? Why did the reasoning break?
+
+## TODO
+- [ ] Preference capture pipeline (currently manual via CLAUDE.md, design automated path after reasoning quality is proven)
