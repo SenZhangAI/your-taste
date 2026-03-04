@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { rm, mkdir } from 'fs/promises';
+import { rm, mkdir, writeFile, readFile } from 'fs/promises';
 import { createDefaultProfile, updateProfile, readProfile } from '../src/profile.js';
 import { renderInstructions } from '../src/instruction-renderer.js';
-import { readPending, updatePending } from '../src/pending.js';
-import { readTasteFile, appendRules } from '../src/taste-file.js';
+import { appendProposal, readProposals, removeProposals } from '../src/proposals.js';
+import { writeManagedRules, readManagedRules, appendManagedRules } from '../src/claudemd.js';
 import { buildAdditionalContext } from '../src/hooks/session-start.js';
 
 const TEST_DIR = '/tmp/your-taste-integration-test';
+const CLAUDE_MD = `${TEST_DIR}/CLAUDE.md`;
 
 describe('end-to-end: profile → render → inject', () => {
   beforeEach(async () => {
@@ -45,7 +46,7 @@ describe('end-to-end: profile → render → inject', () => {
   });
 });
 
-describe('end-to-end: rule accumulation pipeline', () => {
+describe('end-to-end: proposals → CLAUDE.md pipeline', () => {
   beforeEach(async () => {
     process.env.YOUR_TASTE_DIR = TEST_DIR;
     await mkdir(TEST_DIR, { recursive: true });
@@ -56,39 +57,45 @@ describe('end-to-end: rule accumulation pipeline', () => {
     delete process.env.YOUR_TASTE_DIR;
   });
 
-  it('accumulates rules and surfaces them after threshold', async () => {
-    let pending = await readPending();
+  it('accumulates proposals and deduplicates', async () => {
+    await appendProposal({ rule: 'Clean breaks', evidence: 'e1', source: 's1', scope: 'global' });
+    await appendProposal({ rule: 'Clean breaks', evidence: 'e2', source: 's2', scope: 'global' });
+    await appendProposal({ rule: 'Another rule', evidence: 'e3', source: 's3', scope: 'global' });
 
-    // Simulate 3 sessions extracting the same rule
-    pending = await updatePending(pending, ['Clean breaks over gradual migration']);
-    pending = await readPending();
-    pending = await updatePending(pending, ['Clean breaks over gradual migration']);
-    pending = await readPending();
-    pending = await updatePending(pending, ['Clean breaks over gradual migration']);
-    pending = await readPending();
-
-    const rule = pending.rules.find(r => r.text === 'Clean breaks over gradual migration');
-    expect(rule.count).toBe(3);
+    const proposals = await readProposals();
+    expect(proposals).toHaveLength(2);
+    expect(proposals[0].evidence).toBe('e2'); // latest wins
   });
 
-  it('approved rules appear in taste.md and get injected', async () => {
-    await appendRules(['Clean breaks over gradual migration']);
+  it('approved proposals appear in CLAUDE.md', async () => {
+    await appendManagedRules(CLAUDE_MD, ['Clean breaks over gradual migration']);
 
-    const tasteContent = await readTasteFile();
-    expect(tasteContent).toContain('Clean breaks over gradual migration');
+    const rules = await readManagedRules(CLAUDE_MD);
+    expect(rules).toContain('Clean breaks over gradual migration');
 
-    const profile = createDefaultProfile();
-    const context = buildAdditionalContext(profile, tasteContent);
-    expect(context).toContain('Clean breaks over gradual migration');
+    const content = await readFile(CLAUDE_MD, 'utf8');
+    expect(content).toContain('<!-- your-taste:start -->');
+    expect(content).toContain('Clean breaks over gradual migration');
+  });
+
+  it('observations inject via session-start without thinking patterns', async () => {
+    await writeFile(`${TEST_DIR}/observations.md`, [
+      '## Thinking Patterns',
+      '',
+      '- **Abstract-first**: thinks in principles',
+      '',
+      '## Working Principles',
+      '',
+      '- **Clean breaks**: prefers rewrites',
+    ].join('\n'));
+
+    const context = buildAdditionalContext(
+      await readFile(`${TEST_DIR}/observations.md`, 'utf8'),
+      null,
+      null,
+    );
+    expect(context).toContain('Clean breaks');
+    expect(context).not.toContain('Abstract-first');
     expect(context).toContain('error handling'); // quality floor
-  });
-
-  it('falls back to template when no taste.md', async () => {
-    const profile = createDefaultProfile();
-    profile.dimensions.risk_tolerance.score = 0.8;
-    profile.dimensions.risk_tolerance.confidence = 0.6;
-
-    const context = buildAdditionalContext(profile, null);
-    expect(context).toContain('rewrite'); // template instruction
   });
 });

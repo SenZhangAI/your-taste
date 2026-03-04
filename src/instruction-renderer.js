@@ -9,16 +9,9 @@ export function renderFromObservations(observationsMarkdown) {
 
   const sections = [];
 
-  const thinkingHeaders = ['Thinking Patterns', '思维模式'];
-  // Try new header first, fall back to legacy — ensures old observations.md keeps working
+  // Thinking Patterns excluded — injected by UserPromptSubmit hook instead
   const principlesHeaders = ['Working Principles', '工作原则', 'Behavioral Patterns', '行为模式'];
   const misreadsHeaders = ['Common Misreads', '常见误读'];
-
-  let thinking = null;
-  for (const h of thinkingHeaders) {
-    thinking = extractSection(observationsMarkdown, h);
-    if (thinking) break;
-  }
 
   let principles = null;
   let principlesLabel = 'Working Principles';
@@ -36,7 +29,6 @@ export function renderFromObservations(observationsMarkdown) {
     if (misreads) break;
   }
 
-  if (thinking) sections.push(`### Thinking Patterns\n\n${thinking}`);
   if (principles) sections.push(`### ${principlesLabel}\n\n${principles}`);
   if (misreads) sections.push(`### Common Misreads\n\n${misreads}`);
 

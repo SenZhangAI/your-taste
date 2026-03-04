@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 import { parseTranscript, extractConversation } from '../transcript.js';
 import { filterSensitiveData } from '../privacy.js';
-import { readProfile, updateProfile } from '../profile.js';
 import { analyzeTranscript } from '../analyzer.js';
-import { readPending, updatePending, getPendingRuleTexts } from '../pending.js';
+import { appendProposal } from '../proposals.js';
 import { ensureProjectDir } from '../project.js';
 import { updateProjectContext } from '../context.js';
 import { updateGlobalContext, pruneGlobalContext } from '../global-context.js';
@@ -34,24 +33,19 @@ async function main() {
   const filtered = filterSensitiveData(conversation);
   debug(`session-end: analyzing ${filtered.length} chars`);
 
-  const pending = await readPending();
-  const pendingTexts = getPendingRuleTexts(pending);
+  const { rules, context } = await analyzeTranscript(filtered);
+  debug(`session-end: analysis result — ${rules.length} rules, context=${context ? 'yes' : 'null'}`);
 
-  const { signals, rules, context } = await analyzeTranscript(filtered, pendingTexts);
-  debug(`session-end: analysis result — ${signals.length} signals, ${rules.length} rules, context=${context ? 'yes' : 'null'}`);
-
-  if (signals.length > 0) {
-    const profile = await readProfile();
-    await updateProfile(profile, signals);
-    debug(`session-end: profile updated with ${signals.length} signals`);
+  for (const rule of rules) {
+    await appendProposal({
+      rule: typeof rule === 'string' ? rule : rule.text,
+      evidence: typeof rule === 'string' ? '' : (rule.evidence || ''),
+      source: transcript_path,
+      scope: 'global',
+    });
+    debug(`session-end: proposal added — "${typeof rule === 'string' ? rule : rule.text}"`);
   }
 
-  if (rules.length > 0) {
-    await updatePending(pending, rules);
-    debug(`session-end: ${rules.length} rules added to pending`);
-  }
-
-  // Write project-scoped context + global context
   if (context) {
     const projectPath = process.cwd();
     const projectDir = await ensureProjectDir(projectPath);

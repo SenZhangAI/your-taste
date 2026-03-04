@@ -1,29 +1,27 @@
 #!/usr/bin/env node
-import { readProfile } from '../profile.js';
-import { renderInstructions, renderFromObservations } from '../instruction-renderer.js';
+import { renderFromObservations } from '../instruction-renderer.js';
 import { readObservations } from '../observations.js';
-import { readTasteFile } from '../taste-file.js';
 import { ensureProjectDir } from '../project.js';
 import { loadGoal, renderGoalForInjection } from '../goal.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
+import { readProposals } from '../proposals.js';
 import { debug } from '../debug.js';
 
 const QUALITY_FLOOR = 'Apply these preferences on top of professional best practices. Never compromise error handling at system boundaries, security best practices, or data integrity.';
 
-export function buildAdditionalContext(profile, tasteContent, observationsContent, goalContent, projectContextText) {
-  let base;
-  if (tasteContent) {
-    base = `${tasteContent}\n\n${QUALITY_FLOOR}`;
-  } else {
-    base = renderInstructions(profile);
-  }
+export function buildAdditionalContext(observationsContent, goalContent, projectContextText) {
+  const sections = [];
 
   const observationsRendered = renderFromObservations(observationsContent);
-  const goalText = renderGoalForInjection(goalContent);
+  if (observationsRendered) sections.push(observationsRendered);
 
-  const sections = [base, observationsRendered, goalText, projectContextText].filter(Boolean);
-  if (sections.length === 0) return null;
-  return sections.join('\n\n');
+  sections.push(QUALITY_FLOOR);
+
+  const goalText = renderGoalForInjection(goalContent);
+  if (goalText) sections.push(goalText);
+  if (projectContextText) sections.push(projectContextText);
+
+  return sections.length > 1 ? sections.join('\n\n') : null;
 }
 
 async function main() {
@@ -33,13 +31,8 @@ async function main() {
   }
 
   debug('session-start: hook triggered');
-  const profile = await readProfile();
-  const activeDims = Object.values(profile.dimensions).filter(d => d.confidence > 0.3);
-  const tasteContent = await readTasteFile();
-  const hasTaste = !!tasteContent;
   const observationsContent = await readObservations();
   const hasObservations = !!observationsContent;
-  debug(`session-start: profile=${activeDims.length} dims, taste.md=${hasTaste}, observations=${hasObservations}`);
 
   // Load project-scoped data
   let goalContent = null;
@@ -54,31 +47,32 @@ async function main() {
     debug(`session-start: no project data — ${e.message}`);
   }
 
+  // Check for pending proposals
+  const proposals = await readProposals();
+  const hasProposals = proposals.length > 0;
+
   const hasGoal = !!goalContent;
   const hasProjectCtx = !!projectContextText;
-  debug(`session-start: goal=${hasGoal}, projectCtx=${hasProjectCtx}`);
+  debug(`session-start: observations=${hasObservations}, goal=${hasGoal}, projectCtx=${hasProjectCtx}, proposals=${proposals.length}`);
 
-  if (activeDims.length === 0 && !hasTaste && !hasObservations && !hasGoal && !hasProjectCtx) {
+  if (!hasObservations && !hasGoal && !hasProjectCtx && !hasProposals) {
     debug('session-start: no data to inject, exiting');
     process.exit(0);
   }
 
-  const additionalContext = buildAdditionalContext(profile, tasteContent, observationsContent, goalContent, projectContextText);
+  const additionalContext = buildAdditionalContext(observationsContent, goalContent, projectContextText);
 
   const parts = [];
-  if (hasTaste) {
-    parts.push('taste.md loaded');
-  } else if (activeDims.length > 0) {
-    parts.push(`${activeDims.length} dimensions`);
-  }
   if (hasObservations) parts.push('observations');
   if (hasGoal) parts.push('goal');
   if (hasProjectCtx) parts.push('project context');
 
-  const output = {
-    result: `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'no data yet'}`,
-  };
+  let resultMsg = `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'no data yet'}`;
+  if (hasProposals) {
+    resultMsg += ` | ${proposals.length} new rule proposal${proposals.length > 1 ? 's' : ''}, run \`taste review\` to review`;
+  }
 
+  const output = { result: resultMsg };
   if (additionalContext) {
     output.hookSpecificOutput = { additionalContext };
   }
