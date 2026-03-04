@@ -22,15 +22,15 @@ describe('signals intermediate storage', () => {
   });
 
   it('appends and reads back signals', async () => {
-    const dp = [{ ai_proposed: 'x', user_reacted: 'y', strength: 'correction', dimension: 'risk_tolerance', principle: 'test' }];
-    await appendSignals('/path/session1.jsonl', dp);
+    const gaps = [{ what_ai_did: 'x', what_broke: 'y', strength: 'correction', category: 'risk_tolerance', checkpoint: 'test checkpoint text here' }];
+    await appendSignals('/path/session1.jsonl', gaps);
     await appendSignals('/path/session2.jsonl', []);
 
     const { entries, sessions } = await readAllSignals();
     expect(entries).toHaveLength(2);
     expect(sessions.has('/path/session1.jsonl')).toBe(true);
     expect(sessions.has('/path/session2.jsonl')).toBe(true);
-    expect(entries[0].decision_points).toHaveLength(1);
+    expect(entries[0].reasoning_gaps).toHaveLength(1);
   });
 
   it('clears signals file', async () => {
@@ -44,17 +44,17 @@ describe('signals intermediate storage', () => {
     await clearSignals(); // should not throw
   });
 
-  it('collectForSynthesis flattens and caps decision points', () => {
+  it('collectForSynthesis flattens and caps reasoning gaps', () => {
     const entries = [];
     for (let i = 0; i < 10; i++) {
-      const dps = Array.from({ length: 6 }, (_, j) => ({
-        ai_proposed: `proposal ${i}-${j}`,
-        user_reacted: `reaction ${i}-${j}`,
+      const gaps = Array.from({ length: 6 }, (_, j) => ({
+        what_ai_did: `proposal ${i}-${j}`,
+        what_broke: `reaction ${i}-${j}`,
         strength: j < 2 ? 'rejection' : 'correction',
-        dimension: 'risk_tolerance',
-        principle: `User prefers approach ${i}-${j} over alternatives`,
+        category: 'risk_tolerance',
+        checkpoint: `User prefers approach ${i}-${j} over alternatives`,
       }));
-      entries.push({ session: `/s${i}.jsonl`, decision_points: dps });
+      entries.push({ session: `/s${i}.jsonl`, reasoning_gaps: gaps });
     }
 
     const result = collectForSynthesis(entries);
@@ -65,23 +65,36 @@ describe('signals intermediate storage', () => {
 
   it('collectForSynthesis preserves all when under cap', () => {
     const entries = [
-      { session: '/s.jsonl', decision_points: [
-        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'risk_tolerance', principle: 'Direct execution over exploratory searching' },
+      { session: '/s.jsonl', reasoning_gaps: [
+        { what_ai_did: 'a', what_broke: 'b', strength: 'correction', category: 'risk_tolerance', checkpoint: 'Direct execution over exploratory searching' },
       ]},
     ];
     const result = collectForSynthesis(entries);
     expect(result).toHaveLength(1);
   });
 
-  it('collectForSynthesis filters out short principles', () => {
+  it('collectForSynthesis filters out short checkpoints', () => {
     const entries = [
-      { session: '/s.jsonl', decision_points: [
-        { strength: 'correction', dimension: 'risk_tolerance', principle: 'too short' },
-        { strength: 'rejection', dimension: 'risk_tolerance', principle: 'This is a meaningful principle about user behavior' },
+      { session: '/s.jsonl', reasoning_gaps: [
+        { strength: 'correction', category: 'risk_tolerance', checkpoint: 'too short' },
+        { strength: 'rejection', category: 'risk_tolerance', checkpoint: 'This is a meaningful checkpoint about user behavior' },
       ]},
     ];
     const result = collectForSynthesis(entries);
     expect(result).toHaveLength(1);
     expect(result[0].strength).toBe('rejection');
+  });
+
+  it('collectForSynthesis reads legacy decision_points format', () => {
+    const entries = [
+      { session: '/s.jsonl', decision_points: [
+        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'risk_tolerance', principle: 'Direct execution over exploratory searching' },
+        { ai_proposed: 'c', user_reacted: 'd', strength: 'rejection', dimension: 'code_style', principle: 'short' },
+      ]},
+    ];
+    const result = collectForSynthesis(entries);
+    // Legacy principle field used for quality filter — 'short' is < 15 chars
+    expect(result).toHaveLength(1);
+    expect(result[0].principle).toBe('Direct execution over exploratory searching');
   });
 });

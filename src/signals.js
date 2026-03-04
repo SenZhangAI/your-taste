@@ -10,20 +10,20 @@ function getSignalsPath() {
 }
 
 /**
- * Append one session's extracted decision points to the intermediate signals file.
- * Each line = JSON object with sessionPath + decision points.
+ * Append one session's extracted reasoning gaps to the intermediate signals file.
+ * Each line = JSON object with sessionPath + reasoning gaps.
  */
-export async function appendSignals(sessionPath, decisionPoints, context = null) {
+export async function appendSignals(sessionPath, reasoningGaps, context = null) {
   const dir = getDir();
   await mkdir(dir, { recursive: true });
-  const entry = JSON.stringify({ session: sessionPath, decision_points: decisionPoints, context });
+  const entry = JSON.stringify({ session: sessionPath, reasoning_gaps: reasoningGaps, context });
   await appendFile(getSignalsPath(), entry + '\n', 'utf8');
-  debug(`signals: appended ${decisionPoints.length} decision points from ${sessionPath}`);
+  debug(`signals: appended ${reasoningGaps.length} reasoning gaps from ${sessionPath}`);
 }
 
 /**
  * Read all accumulated signals from the intermediate file.
- * Returns { entries: [{session, decision_points, context}], sessions: Set<path> }.
+ * Returns { entries: [{session, reasoning_gaps, context}], sessions: Set<path> }.
  */
 export async function readAllSignals() {
   const entries = [];
@@ -49,26 +49,30 @@ export async function readAllSignals() {
 }
 
 /**
- * Collect all decision points into a flat array, filter low-quality entries,
- * sort by strength, and cap to prevent Pass 2 prompt overflow.
+ * Collect all reasoning gaps into a flat array, filter low-quality entries,
+ * sort by strength, and cap to prevent Stage 2 prompt overflow.
+ * Supports legacy decision_points format for backward compat.
  */
 const STRENGTH_ORDER = { rejection: 0, pushback: 1, correction: 2, active_request: 3 };
 const MAX_SIGNALS_FOR_SYNTHESIS = 25;
-const MIN_PRINCIPLE_LENGTH = 15;
+const MIN_CHECKPOINT_LENGTH = 15;
 
 export function collectForSynthesis(entries) {
   const all = [];
   for (const entry of entries) {
-    for (const dp of entry.decision_points) {
-      all.push(dp);
+    for (const g of (entry.reasoning_gaps || entry.decision_points || [])) {
+      all.push(g);
     }
   }
 
-  // Quality filter: drop decision points with vague/too-short principles
+  // Quality filter: drop gaps with vague/too-short checkpoints (or legacy principles)
   const before = all.length;
-  const filtered = all.filter(dp => dp.principle && dp.principle.length >= MIN_PRINCIPLE_LENGTH);
+  const filtered = all.filter(g => {
+    const text = g.checkpoint || g.principle || '';
+    return text.length >= MIN_CHECKPOINT_LENGTH;
+  });
   if (filtered.length < before) {
-    debug(`signals: filtered ${before - filtered.length} low-quality DPs (principle < ${MIN_PRINCIPLE_LENGTH} chars)`);
+    debug(`signals: filtered ${before - filtered.length} low-quality gaps (checkpoint < ${MIN_CHECKPOINT_LENGTH} chars)`);
   }
 
   // Sort by strength (strongest first)
@@ -89,10 +93,13 @@ export async function clearSignals() {
   const src = getSignalsPath();
   try {
     const content = await readFile(src, 'utf8');
-    // Filter out empty entries (processed but yielded no decision points)
+    // Filter out empty entries (processed but yielded no reasoning gaps)
     const meaningful = content.split('\n').filter(line => {
       if (!line.trim()) return false;
-      try { return JSON.parse(line).decision_points?.length > 0; }
+      try {
+        const parsed = JSON.parse(line);
+        return (parsed.reasoning_gaps?.length > 0) || (parsed.decision_points?.length > 0);
+      }
       catch { return false; }
     });
 
