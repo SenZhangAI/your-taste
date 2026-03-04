@@ -3,7 +3,6 @@ import { backfill } from '../src/backfill.js';
 import { readObservations, writeObservations } from '../src/observations.js';
 import { readProposals, removeProposals } from '../src/proposals.js';
 import { readManagedRules, appendManagedRules } from '../src/claudemd.js';
-import { loadGoal, createGoalTemplate } from '../src/goal.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
@@ -34,8 +33,6 @@ if (command === 'init') {
   await runReviewApply();
 } else if (command === 'status') {
   await runStatus();
-} else if (command === 'goal') {
-  await runGoal();
 } else if (command === 'lang') {
   await runLang();
 } else if (command === 'synthesize') {
@@ -55,7 +52,6 @@ if (command === 'init') {
   console.log('    --signals <p>   Use specific signals file');
   console.log('    --model <m>     Override model for synthesis');
   console.log('  status            Show what your-taste knows about you and this project');
-  console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
   console.log('  lang [code]       Show or set preferred language (zh, en, ja, ...)');
@@ -249,13 +245,10 @@ async function runStatus() {
   }
 
   if (projectDir) {
-    const goal = await loadGoal(projectDir);
     const ctx = await loadProjectContext(projectDir);
-    const hasGoal = !!goal;
     const decisionCount = ctx.decisions.length;
     const questionCount = ctx.open_questions.length;
 
-    console.log(`Goal:        ${hasGoal ? 'set' : 'not set'}`);
     console.log(`Context:     ${decisionCount} decisions, ${questionCount} open questions`);
     if (ctx.last_session) {
       console.log(`Last session: ${ctx.last_session}`);
@@ -274,25 +267,6 @@ async function runStatus() {
   }
 
   console.log('');
-}
-
-async function runGoal() {
-  let projectDir;
-  try {
-    projectDir = await ensureProjectDir(process.cwd());
-  } catch {
-    console.error('Could not determine project directory for current path.');
-    process.exit(1);
-  }
-
-  const { path, created } = await createGoalTemplate(projectDir);
-
-  if (created) {
-    console.log(`Created goal template: ${path}`);
-    console.log('Edit this file to set your project vision, constraints, and architectural decisions.');
-  } else {
-    console.log(`Goal file: ${path}`);
-  }
 }
 
 async function runLang() {

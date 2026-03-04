@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { readFile } from 'fs/promises';
-import { loadGoal, renderGoalForInjection } from '../goal.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { loadGlobalContext, renderGlobalContext } from '../global-context.js';
 import { ensureProjectDir } from '../project.js';
@@ -30,21 +29,14 @@ export async function buildUserPromptContext(projectDir) {
     }
   } catch { /* no observations */ }
 
-  // P2: Project goal
-  let goalText = null;
-  try {
-    const goalContent = await loadGoal(projectDir);
-    goalText = renderGoalForInjection(goalContent);
-  } catch { /* no goal yet */ }
-
-  // P3: Project context
+  // P2: Project context
   let projectCtxText = null;
   try {
     const projectCtx = await loadProjectContext(projectDir);
     projectCtxText = renderProjectContext(projectCtx);
   } catch { /* no context yet */ }
 
-  // P4: Global context
+  // P3: Global context
   let globalCtxText = null;
   try {
     const globalCtx = await loadGlobalContext();
@@ -54,14 +46,12 @@ export async function buildUserPromptContext(projectDir) {
   // Priority-based assembly (lower number = higher priority):
   // P0: CLAUDE.md confirmed rules (read natively by Claude Code, not injected here)
   // P1: thinking framework — core reasoning enhancement
-  // P2: project goal — stable strategic context
-  // P3: project context — recent tactical decisions
-  // P4: global context — cross-project awareness
+  // P2: project context — recent tactical decisions
+  // P3: global context — cross-project awareness
   const prioritized = [
     { text: framework, priority: 'P1', required: true },
-    { text: goalText, priority: 'P2', required: true },
-    { text: projectCtxText, priority: 'P3', required: false },
-    { text: globalCtxText, priority: 'P4', required: false },
+    { text: projectCtxText, priority: 'P2', required: false },
+    { text: globalCtxText, priority: 'P3', required: false },
   ].filter(s => s.text);
 
   if (prioritized.length === 0) return null;

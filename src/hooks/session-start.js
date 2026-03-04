@@ -2,14 +2,13 @@
 import { renderFromObservations } from '../instruction-renderer.js';
 import { readObservations } from '../observations.js';
 import { ensureProjectDir } from '../project.js';
-import { loadGoal, renderGoalForInjection } from '../goal.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { readProposals } from '../proposals.js';
 import { debug } from '../debug.js';
 
 const QUALITY_FLOOR = 'Apply these preferences on top of professional best practices. Never compromise error handling at system boundaries, security best practices, or data integrity.';
 
-export function buildAdditionalContext(observationsContent, goalContent, projectContextText) {
+export function buildAdditionalContext(observationsContent, projectContextText) {
   const sections = [];
 
   const observationsRendered = renderFromObservations(observationsContent);
@@ -17,8 +16,6 @@ export function buildAdditionalContext(observationsContent, goalContent, project
 
   sections.push(QUALITY_FLOOR);
 
-  const goalText = renderGoalForInjection(goalContent);
-  if (goalText) sections.push(goalText);
   if (projectContextText) sections.push(projectContextText);
 
   return sections.length > 1 ? sections.join('\n\n') : null;
@@ -35,12 +32,10 @@ async function main() {
   const hasObservations = !!observationsContent;
 
   // Load project-scoped data
-  let goalContent = null;
   let projectContextText = null;
   try {
     const projectDir = await ensureProjectDir(process.cwd());
     debug(`session-start: project dir=${projectDir}`);
-    goalContent = await loadGoal(projectDir);
     const projectCtx = await loadProjectContext(projectDir);
     projectContextText = renderProjectContext(projectCtx);
   } catch (e) {
@@ -51,20 +46,18 @@ async function main() {
   const proposals = await readProposals();
   const hasProposals = proposals.length > 0;
 
-  const hasGoal = !!goalContent;
   const hasProjectCtx = !!projectContextText;
-  debug(`session-start: observations=${hasObservations}, goal=${hasGoal}, projectCtx=${hasProjectCtx}, proposals=${proposals.length}`);
+  debug(`session-start: observations=${hasObservations}, projectCtx=${hasProjectCtx}, proposals=${proposals.length}`);
 
-  if (!hasObservations && !hasGoal && !hasProjectCtx && !hasProposals) {
+  if (!hasObservations && !hasProjectCtx && !hasProposals) {
     debug('session-start: no data to inject, exiting');
     process.exit(0);
   }
 
-  const additionalContext = buildAdditionalContext(observationsContent, goalContent, projectContextText);
+  const additionalContext = buildAdditionalContext(observationsContent, projectContextText);
 
   const parts = [];
   if (hasObservations) parts.push('observations');
-  if (hasGoal) parts.push('goal');
   if (hasProjectCtx) parts.push('project context');
 
   let resultMsg = `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'no data yet'}`;
