@@ -216,8 +216,8 @@ export function prepareConversation(messages) {
 }
 
 /**
- * Pass 1: Extract decision points from a single session.
- * Returns { decisionPoints, context } or null if session is not viable.
+ * Pass 1: Extract reasoning gaps from a single session.
+ * Returns { reasoningGaps, context } or null if session is not viable.
  */
 async function pass1Session(transcriptPath) {
   debug(`pass1: processing ${transcriptPath}`);
@@ -229,9 +229,9 @@ async function pass1Session(transcriptPath) {
   }
 
   debug(`pass1: extracting signals from ${conversation.length} chars (${messages.length} messages)`);
-  const { decisionPoints, context, userLanguage } = await extractSignals(conversation);
-  debug(`pass1: done — ${decisionPoints.length} decision points${userLanguage ? `, lang=${userLanguage}` : ''}`);
-  return { decisionPoints, context, userLanguage };
+  const { reasoningGaps, context, userLanguage } = await extractSignals(conversation);
+  debug(`pass1: done — ${reasoningGaps.length} reasoning gaps${userLanguage ? `, lang=${userLanguage}` : ''}`);
+  return { reasoningGaps, context, userLanguage };
 }
 
 /**
@@ -267,7 +267,7 @@ export async function backfill(projectsDir, options = {}) {
   if (pass1Resumed > 0) debug(`backfill: resuming — ${pass1Resumed} sessions already have Pass 1 results`);
 
   const total = toProcess.length;
-  debug(`backfill: ${needPass1.length} sessions need Pass 1, ${total} total for Pass 2`);
+  debug(`backfill: ${needPass1.length} sessions need Pass 1, ${total} total for synthesis`);
 
   // --- Pass 1: Extract decision points per session ---
   let extracted = pass1Resumed;
@@ -280,8 +280,8 @@ export async function backfill(projectsDir, options = {}) {
 
     try {
       const result = await pass1Session(sessionPath);
-      if (result && result.decisionPoints.length > 0) {
-        await appendSignals(sessionPath, result.decisionPoints, result.context);
+      if (result && result.reasoningGaps.length > 0) {
+        await appendSignals(sessionPath, result.reasoningGaps, result.context);
         extracted++;
       } else {
         // No decision points but session was processed — record to avoid re-processing
@@ -321,10 +321,10 @@ export async function backfill(projectsDir, options = {}) {
 
   // --- Pass 2: Unified synthesis → observations.md ---
   const { entries } = await readAllSignals();
-  const decisionPoints = collectForSynthesis(entries);
+  const reasoningGaps = collectForSynthesis(entries);
 
-  if (decisionPoints.length === 0) {
-    debug('backfill: no decision points to synthesize');
+  if (reasoningGaps.length === 0) {
+    debug('backfill: no reasoning gaps to synthesize');
     for (const entry of entries) alreadyProcessed.add(entry.session);
     await saveProcessed(alreadyProcessed);
     await clearSignals();
@@ -344,24 +344,24 @@ export async function backfill(projectsDir, options = {}) {
 
   // Retry with fewer decision points on timeout — strongest signals are sorted first,
   // so halving always preserves the highest-value data.
-  const MIN_DPS_FOR_RETRY = 5;
-  let dpsToUse = decisionPoints;
+  const MIN_GAPS_FOR_RETRY = 5;
+  let gapsToUse = reasoningGaps;
   let observationsMarkdown = null;
 
-  while (dpsToUse.length >= MIN_DPS_FOR_RETRY) {
-    debug(`backfill: Pass 2 — synthesizing ${dpsToUse.length} decision points from ${entries.length} sessions`);
+  while (gapsToUse.length >= MIN_GAPS_FOR_RETRY) {
+    debug(`backfill: Pass 2 — synthesizing ${gapsToUse.length} reasoning gaps from ${entries.length} sessions`);
     try {
-      observationsMarkdown = await synthesizeProfile(dpsToUse, existingObservations, tasteRules, synthesisModel);
+      observationsMarkdown = await synthesizeProfile(gapsToUse, existingObservations, tasteRules, synthesisModel);
       break;
     } catch (err) {
-      if (!isTimeoutError(err) || dpsToUse.length <= MIN_DPS_FOR_RETRY) {
+      if (!isTimeoutError(err) || gapsToUse.length <= MIN_GAPS_FOR_RETRY) {
         debug(`backfill: Pass 2 FAILED — ${err.message}`);
         return null;
       }
-      const reduced = Math.max(MIN_DPS_FOR_RETRY, Math.floor(dpsToUse.length / 2));
-      debug(`backfill: Pass 2 timed out with ${dpsToUse.length} DPs, retrying with ${reduced}`);
+      const reduced = Math.max(MIN_GAPS_FOR_RETRY, Math.floor(gapsToUse.length / 2));
+      debug(`backfill: Pass 2 timed out with ${gapsToUse.length} gaps, retrying with ${reduced}`);
       onProgress?.({ phase: 'pass2', total: total + skipCount, retrying: reduced });
-      dpsToUse = decisionPoints.slice(0, reduced);
+      gapsToUse = reasoningGaps.slice(0, reduced);
     }
   }
 

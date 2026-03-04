@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { renderFromObservations } from '../src/instruction-renderer.js';
 
 describe('renderFromObservations', () => {
-  it('renders working principles and common misreads, excludes thinking patterns', () => {
+  it('renders new framework sections: domain reasoning and failure patterns', () => {
+    const md = `## Reasoning Checkpoints\n\n- **Verify FK**: check join keys\n\n## Domain Reasoning\n\n- **DB joins** (3 sessions)\n\n## Failure Patterns\n\n- **AI pattern**: accepts hypothesis as fact`;
+
+    const result = renderFromObservations(md);
+    expect(result).not.toContain('Verify FK'); // checkpoints excluded
+    expect(result).toContain('DB joins');
+    expect(result).toContain('accepts hypothesis as fact');
+  });
+
+  it('renders legacy sections: behavioral patterns and common misreads, excludes thinking patterns', () => {
     const md = `## Thinking Patterns
 
 - **Execution simulation**: validates by running code mentally. (6 sessions, high confidence)

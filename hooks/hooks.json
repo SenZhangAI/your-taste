@@ -8,7 +8,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/session-start.js\"",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -30,7 +30,7 @@
           {
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/src/hooks/user-prompt.js\"",
-            "timeout": 5
+            "timeout": 30
           }
         ]
       }

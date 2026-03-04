@@ -1,34 +1,24 @@
 import { readFile } from 'fs/promises';
 import { complete } from './llm.js';
-import { DIMENSIONS, DIMENSION_NAMES } from './dimensions.js';
 import { debug } from './debug.js';
 import { readLang, languageName, getTemplates } from './lang.js';
 
 // --- Shared helpers ---
 
-function buildDimensionDesc() {
-  return Object.entries(DIMENSIONS)
-    .map(([key, d]) => `- **${key}** (0.0 = ${d.low}, 1.0 = ${d.high})`)
-    .join('\n');
-}
+const VALID_STRENGTHS = new Set(['correction', 'rejection', 'active_request', 'pushback']);
+const VALID_CATEGORIES = new Set(['verification_skip', 'breadth_miss', 'depth_skip', 'assumption_leak', 'overreach']);
 
 function buildLanguageInstruction(lang) {
   if (lang === 'en') return '';
   const name = languageName(lang);
-  return `## Output Language\n\nWrite candidate_rules text and evidence in ${name}. Dimension fields (dimension, direction) stay in English.`;
-}
-
-function buildPendingSection(pendingRuleTexts) {
-  if (!pendingRuleTexts?.length) return '';
-  const list = pendingRuleTexts.map(r => `- "${r}"`).join('\n');
-  return `If a candidate rule is semantically equivalent to an existing pending rule below, use the EXACT text of the existing rule instead of generating new wording.\n\nExisting pending rules:\n${list}`;
+  return `## Output Language\n\nWrite candidate_rules text and evidence in ${name}.`;
 }
 
 // Markers that separate instructions (system) from data (user) in prompts.
 // Everything before the first matching marker → system prompt, everything after → user message.
 const DATA_SEPARATORS = [
   '## Conversation Transcript',  // extract-signals prompt
-  '## Decision Points',          // synthesize-profile prompt
+  '## Reasoning Gaps',           // synthesize-profile prompt
 ];
 
 async function callLLM(promptTemplate, replacements, { timeoutMs, model } = {}) {
@@ -57,7 +47,7 @@ async function callLLM(promptTemplate, replacements, { timeoutMs, model } = {}) 
   return response;
 }
 
-// --- Pass 1: Extract decision points from a single session ---
+// --- Pass 1: Extract reasoning gaps from a single session ---
 
 export async function extractSignals(conversationText) {
   const promptTemplate = await readFile(
@@ -66,26 +56,33 @@ export async function extractSignals(conversationText) {
   );
 
   const response = await callLLM(promptTemplate, {
-    DIMENSION_NAMES: DIMENSION_NAMES.join(', '),
     TRANSCRIPT: conversationText,
   });
 
   const parsed = parseExtractResponse(response);
-  debug(`extract: ${parsed.decisionPoints.length} decision points, context=${parsed.context ? 'yes' : 'null'}`);
+  debug(`extract: ${parsed.reasoningGaps.length} reasoning gaps, context=${parsed.context ? 'yes' : 'null'}`);
   return parsed;
 }
 
 // --- Pass 2: Synthesize profile from accumulated signals ---
 
-export async function synthesizeProfile(decisionPoints, existingObservations = null, tasteRuleTexts = [], model = null) {
+export async function synthesizeProfile(reasoningGaps, existingObservations = null, confirmedRuleTexts = [], model = null) {
   const promptTemplate = await readFile(
     new URL('../prompts/synthesize-profile.md', import.meta.url),
     'utf8',
   );
 
-  const signalsText = decisionPoints.map((dp, i) => {
-    let line = `${i + 1}. [${dp.strength}] ${dp.dimension}: AI proposed: ${dp.ai_proposed} → User: ${dp.user_reacted} → Principle: ${dp.principle}`;
-    if (dp.conditions) line += ` → Conditions: ${dp.conditions}`;
+  const signalsText = reasoningGaps.map((gap, i) => {
+    // New format: reasoning gap fields
+    if (gap.what_ai_did && gap.what_broke) {
+      let line = `${i + 1}. [${gap.category || 'verification_skip'}] AI did: ${gap.what_ai_did} → Broke: ${gap.what_broke}`;
+      if (gap.missing_step) line += ` → Missing step: ${gap.missing_step}`;
+      line += ` → Checkpoint: ${gap.checkpoint}`;
+      return line;
+    }
+    // Legacy fallback: decision point fields
+    let line = `${i + 1}. [${gap.strength || 'correction'}] AI proposed: ${gap.ai_proposed} → User: ${gap.user_reacted} → Principle: ${gap.principle}`;
+    if (gap.conditions) line += ` → Conditions: ${gap.conditions}`;
     return line;
   }).join('\n');
 
@@ -93,20 +90,17 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
   const t = getTemplates(lang);
 
   const existingSection = existingObservations
-    ? `## Existing Observations\n\nMerge new evidence into these existing observations. Re-evaluate all patterns against the combined evidence.\n\n${existingObservations}`
+    ? `## Existing Framework\n\nMerge new evidence into this existing framework. Re-evaluate all checkpoints against the combined evidence.\n\n${existingObservations}`
     : '';
 
-  const tasteSection = tasteRuleTexts.length > 0
-    ? `## Existing Confirmed Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
+  const tasteSection = confirmedRuleTexts.length > 0
+    ? `## Existing Confirmed Rules\n\nDo NOT duplicate these in the framework:\n${confirmedRuleTexts.map(r => `- "${r}"`).join('\n')}`
     : '';
 
-  // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points.
-  // 360s timeout accounts for the 4th section (Common Misreads) adding ~20% output.
   const response = await callLLM(promptTemplate, {
-    THINKING_PATTERNS_HEADER: t.thinkingPatternsHeader || 'Thinking Patterns',
-    WORKING_PRINCIPLES_HEADER: t.workingPrinciplesHeader || 'Working Principles',
-    SUGGESTED_RULES_HEADER: t.suggestedRulesHeader || 'Suggested Rules',
-    COMMON_MISREADS_HEADER: t.commonMisreadsHeader || 'Common Misreads',
+    REASONING_CHECKPOINTS_HEADER: t.reasoningCheckpointsHeader || 'Reasoning Checkpoints',
+    DOMAIN_REASONING_HEADER: t.domainReasoningHeader || 'Domain Reasoning',
+    FAILURE_PATTERNS_HEADER: t.failurePatternsHeader || 'Failure Patterns',
     EXISTING_OBSERVATIONS: existingSection,
     TASTE_RULES: tasteSection,
     LANGUAGE: buildLanguageInstruction(lang),
@@ -116,27 +110,6 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
   const result = parseSynthesisResponse(response);
   debug(`synthesize: produced ${result.length} chars of observations markdown`);
   return result;
-}
-
-// --- Legacy single-pass analysis (used by session-end.js hook) ---
-
-export async function analyzeTranscript(conversationText, pendingRuleTexts = []) {
-  const promptTemplate = await readFile(
-    new URL('../prompts/analyze-session.md', import.meta.url),
-    'utf8',
-  );
-
-  const lang = await readLang();
-  const response = await callLLM(promptTemplate, {
-    DIMENSIONS: buildDimensionDesc(),
-    PENDING_RULES: buildPendingSection(pendingRuleTexts),
-    LANGUAGE: buildLanguageInstruction(lang),
-    TRANSCRIPT: conversationText,
-  });
-
-  const parsed = parseAnalysisResponse(response);
-  debug(`analyzer: parsed ${parsed.signals.length} signals, ${parsed.rules.length} rules, context=${parsed.context ? 'yes' : 'null'}`);
-  return parsed;
 }
 
 function validateContext(raw) {
@@ -156,36 +129,61 @@ function validateContext(raw) {
 
 // --- Parse functions ---
 
-const VALID_STRENGTHS = new Set(['correction', 'rejection', 'active_request', 'pushback']);
-
 export function parseExtractResponse(text) {
   try {
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const result = JSON.parse(cleaned);
 
-    const decisionPoints = (result.decision_points || [])
-      .filter(dp =>
-        dp && typeof dp === 'object' &&
-        typeof dp.ai_proposed === 'string' &&
-        typeof dp.user_reacted === 'string' &&
-        typeof dp.principle === 'string' &&
-        dp.principle.trim().length > 0
-      )
-      .map(dp => ({
-        ai_proposed: dp.ai_proposed.trim(),
-        user_reacted: dp.user_reacted.trim(),
-        strength: VALID_STRENGTHS.has(dp.strength) ? dp.strength : 'correction',
-        dimension: DIMENSION_NAMES.includes(dp.dimension) ? dp.dimension : null,
-        principle: dp.principle.trim(),
-        conditions: typeof dp.conditions === 'string' && dp.conditions.trim().length > 0
-          ? dp.conditions.trim() : null,
-      }));
+    // New format: reasoning_gaps
+    if (Array.isArray(result.reasoning_gaps)) {
+      const reasoningGaps = result.reasoning_gaps
+        .filter(gap =>
+          gap && typeof gap === 'object' &&
+          typeof gap.what_ai_did === 'string' &&
+          typeof gap.what_broke === 'string' &&
+          typeof gap.checkpoint === 'string' &&
+          gap.checkpoint.trim().length > 0
+        )
+        .map(gap => ({
+          what_ai_did: gap.what_ai_did.trim(),
+          what_broke: gap.what_broke.trim(),
+          missing_step: typeof gap.missing_step === 'string' ? gap.missing_step.trim() : '',
+          checkpoint: gap.checkpoint.trim(),
+          strength: VALID_STRENGTHS.has(gap.strength) ? gap.strength : 'correction',
+          category: VALID_CATEGORIES.has(gap.category) ? gap.category : 'verification_skip',
+        }));
 
-    const context = validateContext(result.session_context);
-    const userLanguage = typeof result.user_language === 'string' ? result.user_language.trim().toLowerCase() : null;
-    return { decisionPoints, context, userLanguage };
+      const context = validateContext(result.session_context);
+      const userLanguage = typeof result.user_language === 'string' ? result.user_language.trim().toLowerCase() : null;
+      return { reasoningGaps, context, userLanguage };
+    }
+
+    // Legacy backward compat: decision_points → reasoningGaps
+    if (Array.isArray(result.decision_points)) {
+      const reasoningGaps = result.decision_points
+        .filter(dp =>
+          dp && typeof dp === 'object' &&
+          typeof dp.ai_proposed === 'string' &&
+          typeof dp.principle === 'string' &&
+          dp.principle.trim().length > 0
+        )
+        .map(dp => ({
+          what_ai_did: dp.ai_proposed.trim(),
+          what_broke: typeof dp.user_reacted === 'string' ? dp.user_reacted.trim() : '',
+          missing_step: '',
+          checkpoint: dp.principle.trim(),
+          strength: VALID_STRENGTHS.has(dp.strength) ? dp.strength : 'correction',
+          category: 'verification_skip',
+        }));
+
+      const context = validateContext(result.session_context);
+      const userLanguage = typeof result.user_language === 'string' ? result.user_language.trim().toLowerCase() : null;
+      return { reasoningGaps, context, userLanguage };
+    }
+
+    return { reasoningGaps: [], context: null, userLanguage: null };
   } catch {
-    return { decisionPoints: [], context: null, userLanguage: null };
+    return { reasoningGaps: [], context: null, userLanguage: null };
   }
 }
 
@@ -193,33 +191,4 @@ export function parseSynthesisResponse(text) {
   let cleaned = text.trim();
   cleaned = cleaned.replace(/^```(?:markdown)?\n?/, '').replace(/\n?```$/, '').trim();
   return cleaned;
-}
-
-export function parseAnalysisResponse(text) {
-  try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const result = JSON.parse(cleaned);
-
-    const signals = (result.signals || []).filter(
-      s => DIMENSIONS[s.dimension] && typeof s.score === 'number',
-    );
-
-    const rules = (result.candidate_rules || [])
-      .map(r => {
-        // Object format: { text, evidence }
-        if (r && typeof r === 'object' && typeof r.text === 'string' && r.text.trim().length > 0) {
-          return { text: r.text.trim(), evidence: typeof r.evidence === 'string' ? r.evidence.trim() : null };
-        }
-        // Legacy string format
-        if (typeof r === 'string' && r.trim().length > 0) return { text: r.trim(), evidence: null };
-        return null;
-      })
-      .filter(Boolean);
-
-    const context = validateContext(result.session_context);
-
-    return { signals, rules, context };
-  } catch {
-    return { signals: [], rules: [], context: null };
-  }
 }

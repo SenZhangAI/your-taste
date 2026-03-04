@@ -43,13 +43,13 @@ describe('user-prompt hook priority-based injection', () => {
     expect(result).toContain('cross-project topic');
   });
 
-  it('enhances framework with thinking patterns from observations', async () => {
+  it('uses evolved checkpoints from observations instead of static framework', async () => {
     await writeFile(join(dir, 'observations.md'), [
-      '## Thinking Patterns',
+      '## Reasoning Checkpoints',
       '',
       '- **Abstract-first reasoning**: derives specifics from principles',
       '',
-      '## Working Principles',
+      '## Domain Reasoning',
       '',
       '- Other content',
     ].join('\n'), 'utf8');
@@ -57,19 +57,33 @@ describe('user-prompt hook priority-based injection', () => {
     await mkdir(projectDir, { recursive: true });
 
     const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
-    expect(result).toContain("This User's Thinking Patterns");
+    expect(result).toContain('Reasoning Checkpoints');
     expect(result).toContain('Abstract-first reasoning');
-    expect(result).not.toContain('Other content');
+    expect(result).not.toContain('Intent Inference'); // static framework replaced
+    expect(result).not.toContain('Other content'); // domain reasoning not in user-prompt
   });
 
-  it('works without observations file', async () => {
+  it('uses legacy thinking patterns header as evolved checkpoints', async () => {
+    await writeFile(join(dir, 'observations.md'), [
+      '## Thinking Patterns',
+      '',
+      '- **Pattern A**: legacy format',
+    ].join('\n'), 'utf8');
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Reasoning Checkpoints');
+    expect(result).toContain('Pattern A');
+    expect(result).not.toContain('Intent Inference');
+  });
+
+  it('falls back to static framework when no observations', async () => {
     const projectDir = join(dir, 'projects', 'test');
     await mkdir(projectDir, { recursive: true });
 
     const result = await buildUserPromptContext(projectDir);
     expect(result).toContain('Intent Inference');
-    expect(result).not.toContain("This User's Thinking Patterns");
   });
 
   it('drops lower-priority content when exceeding max chars', async () => {

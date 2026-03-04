@@ -1,155 +1,101 @@
 # your-taste
 
-**Your AI has massive potential. It's barely being used.**
+**Your corrections permanently upgrade how AI reasons about your problems.**
 
-Every AI coding session starts the same way — the AI knows nothing about you. Your thinking patterns, your design philosophy, what you've been working on, the decisions you've already made. So you spend half the session re-explaining context, correcting assumptions, and nudging the AI toward what you actually want.
+Every time you correct an AI — "don't assume, verify first", "you missed the adjacent impact", "trace back to the root cause" — that correction fixes one response. Then it's forgotten. Next session, same mistakes.
 
-The bottleneck isn't AI capability. It's that **AI doesn't know you**.
-
-your-taste fixes this. It's a Claude Code plugin that learns how you think, what you care about, and what you're working on — then applies it automatically, every session.
-
-<!-- TODO: GIF comparison — with vs without your-taste on the same task -->
-
-## Who This Is For
-
-**Heavy AI users who want their AI to be proactive, not reactive.**
-
-If you've ever thought:
-- "I just explained this three sessions ago"
-- "Stop listing 5 options — just pick the best one"
-- "You know my codebase, why are you still asking basic questions?"
-- "I shouldn't have to tell you my preferences every time"
-
-Then you're fighting the same problem your-taste was built to solve.
-
-This is not for casual AI users. It's for people who treat AI as a daily collaborator and expect it to get better at working with *them* over time.
-
-## Design Philosophy
-
-### 1. The gap isn't intelligence — it's context
-
-AI models are extraordinarily capable. But capability without context produces generic output. The same model that writes brilliant code for one developer produces mediocre suggestions for another — not because it's less capable, but because it doesn't know what "good" means *to that person*.
-
-### 2. Understanding you is the unlock
-
-When AI knows your decision-making patterns, your design philosophy, and your current strategic context, something changes. It stops being a tool you direct and starts being a collaborator that anticipates. It infers your *intent*, not just your *instruction*.
-
-You say C, but you thought A → B → C. A great collaborator traces back to A and works forward from there — considering implications you haven't stated yet.
-
-### 3. Taste ≠ Skill
-
-your-taste learns your *direction*, not your *ability*. If you lean minimalist, the AI delivers expert-level simplification — not naive implementations. Your taste sets the direction; professional quality is non-negotiable.
-
-### 4. Behavior > Declaration (with limits)
-
-We learn from what you *do*, not what you *say*. Your corrections, your choices, your pushbacks in real sessions — these are the real signal. But behavior has limits: observing *what* you do doesn't always reveal *why* you do it. That's why the system also infers the underlying principles behind your actions.
-
-## What You Get
-
-**No more cold starts.** `taste init` scans your conversation history and builds your observations in seconds. Day-100 experience from day one.
-
-**Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste distills your preferences into observations with context conditions and concrete behavioral rules — applied the same way every time.
-
-**Zero effort.** No config files to maintain. No questionnaires. The plugin watches how you respond to AI proposals and learns silently. You just work.
-
-**Your data stays yours.** Everything lives locally on your machine. No project code, no business logic, no conversation content is ever stored — just distilled observations and behavioral rules. Wide in, narrow out.
+your-taste captures these reasoning corrections and synthesizes them into a thinking framework that's injected into every AI message. The AI stops making the same reasoning errors across sessions.
 
 ## How It Works
 
 ```
-Session ends → Read transcript → Filter PII → Extract decision points → Synthesize observations
-                                                                          ↓
-Every message → Inject thinking framework + recent context
-                                                                          ↓
-Session starts → Load observations + context.md → AI starts informed
+Session ends → Extract reasoning gaps → Synthesize thinking framework
+                                              ↓
+Every message → Inject framework as reasoning checkpoints
 ```
 
-**Learning (two channels)**
+**Reasoning gaps** are moments where AI's thinking broke down:
 
-1. **`taste init` (batch)**: Scans past session transcripts → Stage 1 extracts decision points → Stage 2 synthesizes `observations.md` (narrative document with Thinking Patterns, Working Principles, Suggested Rules, Common Misreads) → Suggested rules go to `proposals.jsonl`
+| Category | What broke | Example |
+|----------|-----------|---------|
+| `verification_skip` | Acted without verifying | Assumed a file was missing after one failed search |
+| `breadth_miss` | Missed adjacent implications | Fixed a bug without checking related assumptions |
+| `depth_skip` | Stopped at surface level | Responded to the literal request instead of the underlying need |
+| `assumption_leak` | Treated hypothesis as fact | Implemented based on unverified user claim about code behavior |
+| `overreach` | Expanded scope unnecessarily | Full-chain analysis when user pointed to a specific target |
 
-2. **SessionEnd hook (incremental)**: Analyzes each session for strong behavioral signals → new rule proposals go to `proposals.jsonl` → project `context.md` and `global-context.md` update automatically
+These gaps are synthesized into a **thinking framework** with three sections:
 
-**Confirming rules**: `taste review` presents proposals for user approval → accepted rules write to `~/.claude/CLAUDE.md` in a managed section (`<!-- your-taste:start/end -->`) → Claude Code reads them natively
+1. **Reasoning Checkpoints** — Verification steps before acting (e.g., "When a user describes code behavior, trace the actual call chain before implementing")
+2. **Domain Reasoning** — How to think correctly in specific problem domains
+3. **Failure Patterns** — Recurring reasoning errors with root causes
 
-**Applying (three-layer injection)**
+The framework evolves: new sessions add evidence, weak patterns fade, strong ones strengthen.
 
-1. **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
-2. **SessionStart** — Working Principles + Common Misreads from observations + project context
-3. **UserPromptSubmit** — Thinking framework + personalized thinking patterns + project context on every message
+## Install
 
-## Quick Start
-
-### Prerequisites
-
-- [Claude Code](https://code.claude.com/) installed
-- An LLM provider configured (see [Providers](#providers) below)
-
-### Install
+Requires [Claude Code](https://code.claude.com/).
 
 ```bash
 claude plugin install your-taste
 ```
 
-### Build Your Observations Instantly
+## Quick Start
+
+### 1. Build your thinking framework from past sessions
 
 ```bash
 taste init
 ```
 
-Scans your past Claude Code sessions and builds observations in seconds. No waiting, no questionnaires — just your real behavioral patterns.
+Scans your Claude Code history, extracts reasoning gaps, and synthesizes your initial framework. Takes seconds.
 
-### Review Rule Proposals
+### 2. See what was learned
+
+```bash
+taste show
+```
+
+### 3. Review proposed rules
 
 ```bash
 taste review
 ```
 
-### Check Status
+Strong patterns get proposed as behavioral rules. Review and accept/reject them — accepted rules are written to `~/.claude/CLAUDE.md` where Claude Code reads them natively.
 
-```bash
-taste status
-```
+After init, the framework evolves automatically via the SessionEnd hook. No maintenance needed.
 
-### Local Development
+## Commands
 
-```bash
-git clone https://github.com/SenZhangAI/your-taste.git
-cd your-taste && npm install
-```
+| Command | What it does |
+|---------|-------------|
+| `taste init` | Build framework from conversation history |
+| `taste show` | Display current thinking framework |
+| `taste review` | Accept/reject proposed rules |
+| `taste status` | Show configuration and framework stats |
+| `taste debug on/off/log` | Toggle debug mode |
 
 ## Privacy
 
-**your-taste never stores your code, business logic, or conversation content.**
+**No code, business logic, or conversation content is stored.**
 
-What IS stored (`~/.your-taste/`):
-- `observations.md` — Thinking patterns, behavioral patterns with context conditions, suggested rules
-- `global-context.md` — Cross-project focus topics (what you're working on across projects)
-- `projects/<name>/context.md` — Recent tactical decisions and open questions (auto-maintained)
-- `proposals.jsonl` — Pending rule suggestions awaiting review
-- `config.yaml` — LLM provider configuration
+Stored locally in `~/.your-taste/`:
+- `observations.md` — Your thinking framework (reasoning checkpoints, domain rules, failure patterns)
+- `proposals.jsonl` — Pending rule proposals
+- `config.yaml` — LLM provider config
 
-Confirmed rules live in `~/.claude/CLAUDE.md` (managed section).
+Confirmed rules live in `~/.claude/CLAUDE.md` (managed `<!-- your-taste:start/end -->` section).
 
-What is NOT stored:
-- Code snippets or file contents
-- Business domain details
-- Credentials, API keys, PII
-- The conversation itself
-
-All sensitive data is stripped **before** the transcript reaches the AI analyzer. The pipeline is wide-in, narrow-out: full conversation goes in, only narrative observations, behavioral rules, and strategic-level context come out.
+All sensitive data is stripped before analysis. Full conversation goes in, only reasoning patterns come out.
 
 ## Configuration
 
-Set `YOUR_TASTE_DIR` to change the storage location (default: `~/.your-taste/`).
+Set `YOUR_TASTE_DIR` to change storage location (default: `~/.your-taste/`).
 
-## Providers
+### LLM Providers
 
-your-taste needs an LLM to analyze your sessions. Set an environment variable and it auto-detects, or configure explicitly in `~/.your-taste/config.yaml`.
-
-### Auto-detection (zero config)
-
-Set any of these env vars — first one found wins:
+your-taste needs an LLM for analysis. Set an env var and it auto-detects:
 
 | Priority | Provider | Env Variable | Default Model |
 |----------|----------|-------------|---------------|
@@ -161,32 +107,12 @@ Set any of these env vars — first one found wins:
 | 6 | Mistral | `MISTRAL_API_KEY` | mistral-small-latest |
 | 7 | OpenRouter | `OPENROUTER_API_KEY` | anthropic/claude-haiku |
 
-### Explicit config
-
-Create `~/.your-taste/config.yaml`:
+Or configure explicitly in `~/.your-taste/config.yaml`:
 
 ```yaml
 provider: deepseek
 apiKey: sk-...
-# model: deepseek-chat    # optional, overrides default
-# baseUrl: https://...    # optional, overrides default
-```
-
-### Claude Max Proxy (use your subscription, no API key)
-
-If you have a Claude Max/Pro subscription but no API key, [claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) wraps your Claude Code CLI as a local OpenAI-compatible API:
-
-```bash
-git clone https://github.com/atalovesyou/claude-max-api-proxy.git
-cd claude-max-api-proxy && npm install && npm run build
-node dist/server/standalone.js  # runs on localhost:3456
-```
-
-Then configure:
-
-```yaml
-provider: claude-max-proxy
-# model: claude-sonnet-4   # or claude-opus-4, claude-haiku-4
+# model: deepseek-chat    # optional override
 ```
 
 ### Ollama (local models)
@@ -194,16 +120,32 @@ provider: claude-max-proxy
 ```yaml
 provider: ollama
 model: llama3.2
-# baseUrl: http://localhost:11434/v1   # default
+```
+
+### Claude Max Proxy (no API key needed)
+
+With a Claude subscription, use [claude-max-api-proxy](https://github.com/atalovesyou/claude-max-api-proxy) as a local API:
+
+```yaml
+provider: claude-max-proxy
 ```
 
 ### No provider?
 
-Outside Claude Code, your-taste falls back to `claude -p` (Claude Code CLI). Inside Claude Code, you need one of the above configured.
+Outside Claude Code, falls back to `claude -p` (Claude Code CLI).
 
-## Roadmap
+## Architecture
 
-See [ROADMAP.md](ROADMAP.md) for what's next — from context acceleration to cross-platform support.
+Three-layer injection:
+
+1. **CLAUDE.md** (native) — Confirmed behavioral rules, read by Claude Code directly
+2. **SessionStart hook** — Domain reasoning + failure patterns from the thinking framework
+3. **UserPromptSubmit hook** — Reasoning checkpoints injected per message
+
+Two learning channels:
+
+1. **`taste init`** (batch) — Stage 1 extracts reasoning gaps → Stage 2 synthesizes framework
+2. **SessionEnd hook** (incremental) — Analyzes each session, proposes new rules
 
 ## License
 
