@@ -52,7 +52,7 @@ export async function buildUserPromptContext(projectDir) {
   } catch { /* no global context */ }
 
   // Priority-based assembly (lower number = higher priority):
-  // P0: taste.md (injected by session-start, not here)
+  // P0: CLAUDE.md confirmed rules (read natively by Claude Code, not injected here)
   // P1: thinking framework — core reasoning enhancement
   // P2: project goal — stable strategic context
   // P3: project context — recent tactical decisions

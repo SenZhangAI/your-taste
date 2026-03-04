@@ -1,50 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm, mkdir, writeFile, readFile } from 'fs/promises';
-import { createDefaultProfile, updateProfile, readProfile } from '../src/profile.js';
-import { renderInstructions } from '../src/instruction-renderer.js';
 import { appendProposal, readProposals, removeProposals } from '../src/proposals.js';
 import { writeManagedRules, readManagedRules, appendManagedRules } from '../src/claudemd.js';
 import { buildAdditionalContext } from '../src/hooks/session-start.js';
 
 const TEST_DIR = '/tmp/your-taste-integration-test';
 const CLAUDE_MD = `${TEST_DIR}/CLAUDE.md`;
-
-describe('end-to-end: profile → render → inject', () => {
-  beforeEach(async () => {
-    process.env.YOUR_TASTE_DIR = TEST_DIR;
-    await mkdir(TEST_DIR, { recursive: true });
-  });
-
-  afterEach(async () => {
-    await rm(TEST_DIR, { recursive: true, force: true });
-    delete process.env.YOUR_TASTE_DIR;
-  });
-
-  it('renders instructions from a profile built by multiple signals', async () => {
-    const profile = createDefaultProfile();
-    const signals = [
-      { dimension: 'risk_tolerance', score: 0.85, direction: 'bold', evidence: 'Chose rewrite' },
-      { dimension: 'risk_tolerance', score: 0.75, direction: 'bold', evidence: 'Skipped compat' },
-      { dimension: 'risk_tolerance', score: 0.9, direction: 'bold', evidence: 'Deleted legacy' },
-      { dimension: 'communication_style', score: 0.2, direction: 'direct', evidence: 'Cut explanation' },
-      { dimension: 'communication_style', score: 0.15, direction: 'direct', evidence: 'Asked for brevity' },
-    ];
-    await updateProfile(profile, signals);
-    const saved = await readProfile();
-    const instructions = renderInstructions(saved);
-
-    expect(instructions).not.toBeNull();
-    expect(instructions).toContain('rewrite');
-    expect(instructions).toContain('brief');
-    expect(instructions).toContain('error handling');
-  });
-
-  it('returns null for fresh profile with no evidence', () => {
-    const profile = createDefaultProfile();
-    const instructions = renderInstructions(profile);
-    expect(instructions).toBeNull();
-  });
-});
 
 describe('end-to-end: proposals → CLAUDE.md pipeline', () => {
   beforeEach(async () => {

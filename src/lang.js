@@ -68,8 +68,6 @@ export function languageName(code) {
  */
 const TEMPLATES = {
   en: {
-    // taste-file.js
-    tasteHeader: '# Your Taste',
     // global-context.js
     globalContextHeader: '# Cross-Project Focus',
     globalContextInjection: '### Cross-Project Focus',
@@ -96,7 +94,6 @@ const TEMPLATES = {
     commonMisreadsHeader: 'Common Misreads',
   },
   zh: {
-    tasteHeader: '# 你的品味',
     globalContextHeader: '# 跨项目关注方向',
     globalContextInjection: '### 跨项目关注方向',
     goalHeader: '# 项目目标',
@@ -119,7 +116,6 @@ const TEMPLATES = {
     commonMisreadsHeader: '常见误读',
   },
   ja: {
-    tasteHeader: '# あなたのテイスト',
     globalContextHeader: '# クロスプロジェクト フォーカス',
     globalContextInjection: '### クロスプロジェクト フォーカス',
     goalHeader: '# プロジェクト目標',

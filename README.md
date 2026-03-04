@@ -46,7 +46,7 @@ We learn from what you *do*, not what you *say*. Your corrections, your choices,
 
 ## What You Get
 
-**No more cold starts.** `taste init` scans your conversation history and builds your preference profile in seconds. Day-100 experience from day one.
+**No more cold starts.** `taste init` scans your conversation history and builds your observations in seconds. Day-100 experience from day one.
 
 **Consistent AI behavior.** Writing "I prefer minimal code" in CLAUDE.md means different things to the AI every session. your-taste distills your preferences into observations with context conditions and concrete behavioral rules — applied the same way every time.
 
@@ -61,30 +61,22 @@ Session ends → Read transcript → Filter PII → Extract decision points → 
                                                                           ↓
 Every message → Inject thinking framework + project goal + recent context
                                                                           ↓
-Session starts → Load taste.md + observations + goal.md + context.md → AI starts informed
+Session starts → Load observations + goal.md + context.md → AI starts informed
 ```
 
-**Learning (SessionEnd)**
-1. Privacy filter strips all credentials and PII locally
-2. **Stage 1**: LLM extracts decision points — moments where you corrected, rejected, or redirected the AI — tracing surface behavior back to underlying principles (A→B→C inference)
-3. **Stage 2**: Decision points across sessions are synthesized into `observations.md` — a narrative document with three sections: Thinking Patterns (stable cognitive models), Behavioral Patterns (context-dependent preferences with motivation), and Suggested Rules (candidates for `taste.md`)
-4. Project `context.md` and `global-context.md` update automatically
+**Learning (two channels)**
 
-**Applying (SessionStart + every message)**
-5. SessionStart injects your `taste.md` rules + observation patterns + project `goal.md` + recent context
-6. UserPromptSubmit hook injects a thinking framework on every message — guiding AI to infer your *intent* (A), not just your *instruction* (C)
-7. Priority-based injection ensures the most important context always fits within budget
+1. **`taste init` (batch)**: Scans past session transcripts → Stage 1 extracts decision points → Stage 2 synthesizes `observations.md` (narrative document with Thinking Patterns, Working Principles, Suggested Rules, Common Misreads) → Suggested rules go to `proposals.jsonl`
 
-## The 6 Dimensions
+2. **SessionEnd hook (incremental)**: Analyzes each session for strong behavioral signals → new rule proposals go to `proposals.jsonl` → project `context.md` and `global-context.md` update automatically
 
-| Dimension | Low (0.0) | High (1.0) |
-|---|---|---|
-| **Risk Tolerance** | Cautious — gradual changes, proven patterns | Bold — clean breaks, move fast |
-| **Complexity** | Minimalist — less code, simpler solutions | Comprehensive — thorough coverage |
-| **Autonomy** | Collaborative — check before acting | Autonomous — decide and execute |
-| **Communication** | Direct — brief, action-oriented | Detailed — thorough explanations |
-| **Quality vs Speed** | Pragmatic — ship fast, iterate | Perfectionist — quality first |
-| **Exploration** | Focused — stick to the task | Exploratory — improve surroundings |
+**Confirming rules**: `taste review` presents proposals for user approval → accepted rules write to `~/.claude/CLAUDE.md` in a managed section (`<!-- your-taste:start/end -->`) → Claude Code reads them natively
+
+**Applying (three-layer injection)**
+
+1. **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
+2. **SessionStart** — Working Principles + Common Misreads from observations + project context
+3. **UserPromptSubmit** — Thinking framework + personalized thinking patterns + goal + context on every message
 
 ## Quick Start
 
@@ -99,18 +91,24 @@ Session starts → Load taste.md + observations + goal.md + context.md → AI st
 claude plugin install your-taste
 ```
 
-### Build Your Profile Instantly
+### Build Your Observations Instantly
 
 ```bash
 taste init
 ```
 
-Scans your past Claude Code sessions and builds your preference profile in seconds. No waiting, no questionnaires — just your real behavioral patterns.
+Scans your past Claude Code sessions and builds observations in seconds. No waiting, no questionnaires — just your real behavioral patterns.
 
-### See Your Profile
+### Review Rule Proposals
 
 ```bash
-taste show
+taste review
+```
+
+### Check Status
+
+```bash
+taste status
 ```
 
 ### Local Development
@@ -125,12 +123,14 @@ cd your-taste && npm install
 **your-taste never stores your code, business logic, or conversation content.**
 
 What IS stored (`~/.your-taste/`):
-- `observations.md` — Thinking patterns, behavioral patterns with context conditions, suggested rules (primary AI output)
-- `taste.md` — User-reviewed behavioral rules and design philosophy in plain language
-- `profile.yaml` — Optional dimension scores for display
+- `observations.md` — Thinking patterns, behavioral patterns with context conditions, suggested rules
 - `global-context.md` — Cross-project focus topics (what you're working on across projects)
 - `projects/<name>/goal.md` — Project vision and constraints (user-authored)
 - `projects/<name>/context.md` — Recent tactical decisions and open questions (auto-maintained)
+- `proposals.jsonl` — Pending rule suggestions awaiting review
+- `config.yaml` — LLM provider configuration
+
+Confirmed rules live in `~/.claude/CLAUDE.md` (managed section).
 
 What is NOT stored:
 - Code snippets or file contents
@@ -142,15 +142,7 @@ All sensitive data is stripped **before** the transcript reaches the AI analyzer
 
 ## Configuration
 
-Everything lives in `~/.your-taste/`:
-- `observations.md` — thinking patterns, behavioral patterns, suggested rules (AI-generated, human-readable)
-- `taste.md` — your behavioral rules and design philosophy (human-readable, editable)
-- `profile.yaml` — optional dimension scores for display (machine-internal, human-readable)
-- `global-context.md` — cross-project focus tracking (human-readable, editable)
-- `projects/<name>/goal.md` — project vision and constraints (human-authored)
-- `projects/<name>/context.md` — recent decisions, open questions, last session (auto-maintained)
-
-Set `YOUR_TASTE_DIR` to change the storage location.
+Set `YOUR_TASTE_DIR` to change the storage location (default: `~/.your-taste/`).
 
 ## Providers
 

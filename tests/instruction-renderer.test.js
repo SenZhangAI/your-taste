@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderFromObservations, renderInstructions } from '../src/instruction-renderer.js';
-import { createDefaultProfile } from '../src/profile.js';
+import { renderFromObservations } from '../src/instruction-renderer.js';
 
 describe('renderFromObservations', () => {
   it('renders working principles and common misreads, excludes thinking patterns', () => {
@@ -62,20 +61,5 @@ describe('renderFromObservations', () => {
     const md = '## Common Misreads\n\n- Misread one';
     const result = renderFromObservations(md);
     expect(result).toContain('Misread one');
-  });
-});
-
-describe('renderInstructions fallback', () => {
-  it('returns null for default profile', () => {
-    const profile = createDefaultProfile();
-    expect(renderInstructions(profile)).toBeNull();
-  });
-
-  it('renders instruction for high-confidence dimension', () => {
-    const profile = createDefaultProfile();
-    profile.dimensions.risk_tolerance.score = 0.8;
-    profile.dimensions.risk_tolerance.confidence = 0.6;
-    const result = renderInstructions(profile);
-    expect(result).toContain('rewrite');
   });
 });

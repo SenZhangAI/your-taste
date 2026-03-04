@@ -19,9 +19,7 @@ Apply learned observations from your-taste to CLAUDE.md files.
    - Read the current project's CLAUDE.md if it exists (check common locations: `./CLAUDE.md`, then parent directories up to git root)
    - Note the full content of each file, paying attention to any existing `<!-- your-taste:start -->` ... `<!-- your-taste:end -->` sections
 
-3. Also read `~/.your-taste/taste.md` if it exists — include its rules as migration candidates.
-
-4. Analyze observations.md and extract actionable rules for CLAUDE.md:
+3. Analyze observations.md and extract actionable rules for CLAUDE.md:
 
    **Source priority:**
    - **Suggested Rules section**: Direct candidates — already in concise rule format
@@ -34,15 +32,11 @@ Apply learned observations from your-taste to CLAUDE.md files.
    - Determine scope: mentions specific tech stack, project name, or domain → project-level; abstract principle → global-level
    - Rewrite if needed to match CLAUDE.md's directive style (imperative, concise)
 
-   **taste.md migration:**
-   - If taste.md has rules not yet in CLAUDE.md, include them as candidates
-   - These are user-reviewed rules, so they have high confidence
-
-5. If no new rules to suggest (all deduplicated), tell the user:
+4. If no new rules to suggest (all deduplicated), tell the user:
    "Your CLAUDE.md already reflects your current observations — no changes needed."
    Then stop.
 
-6. Present the changes. For EACH target file (global CLAUDE.md first, then project CLAUDE.md if applicable):
+5. Present the changes. For EACH target file (global CLAUDE.md first, then project CLAUDE.md if applicable):
 
    **If the file has no `<!-- your-taste:start -->` section yet:**
    - Use Edit tool to append the new section at the end of the file:
@@ -64,7 +58,7 @@ Apply learned observations from your-taste to CLAUDE.md files.
 
    The user will see each Edit as a diff preview and can accept or reject.
 
-7. After all edits are presented, summarize what was applied:
+6. After all edits are presented, summarize what was applied:
    - How many rules were added to global CLAUDE.md
    - How many rules were added to project CLAUDE.md (if any)
    - Remind the user these will take effect on their next session

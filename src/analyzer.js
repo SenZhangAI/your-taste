@@ -97,7 +97,7 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
     : '';
 
   const tasteSection = tasteRuleTexts.length > 0
-    ? `## Existing taste.md Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
+    ? `## Existing Confirmed Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
     : '';
 
   // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points.
