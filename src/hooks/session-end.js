@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { parseTranscript, extractConversation } from '../transcript.js';
 import { filterSensitiveData } from '../privacy.js';
-import { analyzeTranscript } from '../analyzer.js';
-import { appendProposal } from '../proposals.js';
+import { extractSignals } from '../analyzer.js';
+import { appendSignals } from '../signals.js';
 import { ensureProjectDir } from '../project.js';
 import { updateProjectContext } from '../context.js';
 import { updateGlobalContext, pruneGlobalContext } from '../global-context.js';
@@ -33,17 +33,12 @@ async function main() {
   const filtered = filterSensitiveData(conversation);
   debug(`session-end: analyzing ${filtered.length} chars`);
 
-  const { rules, context } = await analyzeTranscript(filtered);
-  debug(`session-end: analysis result — ${rules.length} rules, context=${context ? 'yes' : 'null'}`);
+  const { reasoningGaps, context } = await extractSignals(filtered);
+  debug(`session-end: extracted ${reasoningGaps.length} reasoning gaps, context=${context ? 'yes' : 'null'}`);
 
-  for (const rule of rules) {
-    await appendProposal({
-      rule: typeof rule === 'string' ? rule : rule.text,
-      evidence: typeof rule === 'string' ? '' : (rule.evidence || ''),
-      source: transcript_path,
-      scope: 'global',
-    });
-    debug(`session-end: proposal added — "${typeof rule === 'string' ? rule : rule.text}"`);
+  if (reasoningGaps.length > 0) {
+    await appendSignals(transcript_path, reasoningGaps, context);
+    debug(`session-end: ${reasoningGaps.length} reasoning gaps saved to signals.jsonl`);
   }
 
   if (context) {
@@ -54,7 +49,7 @@ async function main() {
       open_questions: context.open_questions || [],
       summary: context.topics ? context.topics.join(', ') : null,
     });
-    debug(`session-end: project context updated (${context.decisions?.length || 0} decisions, ${context.open_questions?.length || 0} questions)`);
+    debug(`session-end: project context updated`);
 
     if (context.topics && context.topics.length > 0) {
       await updateGlobalContext(context.topics);
@@ -66,5 +61,6 @@ async function main() {
 
 main().catch((e) => {
   debug(`session-end: fatal error — ${e.message}\n${e.stack}`);
+  console.log(JSON.stringify({ result: `your-taste: session-end error — ${e.message}` }));
   process.exit(0);
 });
