@@ -93,7 +93,7 @@ Fields:
 - **what_broke**: Why this was a reasoning failure (1 sentence)
 - **missing_step**: The specific step AI should have taken (actionable, concrete)
 - **checkpoint**: Generalized verification rule derived from this gap (reusable across situations)
-- **strength**: "correction" | "rejection" | "active_request" | "pushback"
+- **strength**: "correction" (user corrected AI's approach) | "rejection" (user rejected AI's proposal outright) | "active_request" (user proactively requested something AI should have offered) | "pushback" (user pushed back on AI's reasoning or assumption)
 - **category**: "verification_skip" | "breadth_miss" | "depth_skip" | "assumption_leak" | "overreach"
 
 - **user_language**: ISO 639-1 code of the language the HUMAN (not AI) primarily uses in the transcript (e.g., "zh", "en", "ja")

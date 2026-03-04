@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, rm } from 'fs/promises';
+import { mkdir, rm, readdir, readFile } from 'fs/promises';
 import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from '../src/signals.js';
 
 const TEST_DIR = '/tmp/your-taste-test-signals';
@@ -96,5 +96,47 @@ describe('signals intermediate storage', () => {
     // Legacy principle field used for quality filter — 'short' is < 15 chars
     expect(result).toHaveLength(1);
     expect(result[0].principle).toBe('Direct execution over exploratory searching');
+  });
+
+  it('collectForSynthesis handles mixed old and new format entries', () => {
+    const entries = [
+      { session: '/s1.jsonl', reasoning_gaps: [
+        { what_ai_did: 'x', what_broke: 'y', strength: 'rejection', category: 'verification_skip', checkpoint: 'Verify join key semantics before writing queries' },
+      ]},
+      { session: '/s2.jsonl', decision_points: [
+        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'risk_tolerance', principle: 'Direct execution over exploratory searching' },
+      ]},
+    ];
+    const result = collectForSynthesis(entries);
+    expect(result).toHaveLength(2);
+    // rejection sorts before correction
+    expect(result[0].strength).toBe('rejection');
+    expect(result[0].checkpoint).toBe('Verify join key semantics before writing queries');
+    expect(result[1].strength).toBe('correction');
+    expect(result[1].principle).toBe('Direct execution over exploratory searching');
+  });
+
+  it('clearSignals archives meaningful entries to history/', async () => {
+    const gaps = [{ what_ai_did: 'x', what_broke: 'y', strength: 'correction', category: 'verification_skip', checkpoint: 'test checkpoint text here' }];
+    await appendSignals('/path/session1.jsonl', gaps);
+    await appendSignals('/path/session2.jsonl', []); // empty — should be excluded from archive
+
+    await clearSignals();
+
+    // Original file should be gone
+    const { entries } = await readAllSignals();
+    expect(entries).toEqual([]);
+
+    // History dir should have archived file with only meaningful entries
+    const historyDir = `${TEST_DIR}/history`;
+    const files = await readdir(historyDir);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^init-signals-.*\.jsonl$/);
+
+    const archived = await readFile(`${historyDir}/${files[0]}`, 'utf8');
+    const lines = archived.trim().split('\n');
+    expect(lines).toHaveLength(1); // only the entry with gaps
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.reasoning_gaps).toHaveLength(1);
   });
 });

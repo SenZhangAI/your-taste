@@ -70,14 +70,14 @@ describe('observations', () => {
   it('extracts section with localized headers', () => {
     const md = `## 思维模式
 
-- **执行模拟**: desc
+- **Exec simulation**: desc
 
 ## 行为模式
 
-- **干净切换**: desc`;
+- **Clean break**: desc`;
 
-    expect(extractSection(md, '思维模式')).toContain('执行模拟');
-    expect(extractSection(md, '行为模式')).toContain('干净切换');
+    expect(extractSection(md, '思维模式')).toContain('Exec simulation');
+    expect(extractSection(md, '行为模式')).toContain('Clean break');
   });
 
   it('returns null for missing section', () => {
@@ -129,8 +129,8 @@ describe('extractReasoningCheckpoints', () => {
   });
 
   it('extracts Chinese "推理检查点" section', () => {
-    const md = '## 推理检查点\n\n检查点一\n\n## 领域推理\n\nSomething';
-    expect(extractReasoningCheckpoints(md)).toBe('检查点一');
+    const md = '## 推理检查点\n\nCheckpoint one\n\n## 领域推理\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('Checkpoint one');
   });
 
   it('falls back to legacy "Thinking Patterns" header', () => {
@@ -139,8 +139,8 @@ describe('extractReasoningCheckpoints', () => {
   });
 
   it('falls back to legacy "思维模式" header', () => {
-    const md = '## 思维模式\n\n模式一\n\n## Other\n\nSomething';
-    expect(extractReasoningCheckpoints(md)).toBe('模式一');
+    const md = '## 思维模式\n\nPattern one\n\n## Other\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('Pattern one');
   });
 
   it('returns null when no matching section', () => {
@@ -159,8 +159,8 @@ describe('extractThinkingPatterns (deprecated)', () => {
   });
 
   it('extracts Chinese header', () => {
-    const md = '## 思维模式\n\n模式一\n\n## 工作原则\n\nSomething';
-    expect(extractThinkingPatterns(md)).toBe('模式一');
+    const md = '## 思维模式\n\nPattern one\n\n## 工作原则\n\nSomething';
+    expect(extractThinkingPatterns(md)).toBe('Pattern one');
   });
 
   it('returns null when no thinking patterns section', () => {

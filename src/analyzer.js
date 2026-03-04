@@ -11,7 +11,7 @@ const VALID_CATEGORIES = new Set(['verification_skip', 'breadth_miss', 'depth_sk
 function buildLanguageInstruction(lang) {
   if (lang === 'en') return '';
   const name = languageName(lang);
-  return `## Output Language\n\nWrite candidate_rules text and evidence in ${name}.`;
+  return `## Output Language\n\nWrite all text fields (checkpoints, reasoning, evidence) in ${name}.`;
 }
 
 // Markers that separate instructions (system) from data (user) in prompts.
