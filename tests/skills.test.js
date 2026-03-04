@@ -17,6 +17,12 @@ describe('apply-observations skill', () => {
     expect(content).toContain('your-taste:start');
     expect(content).toContain('your-taste:end');
   });
+
+  it('requires user selection before applying rules', async () => {
+    const content = await readFile(new URL('../skills/apply-observations/SKILL.md', import.meta.url), 'utf8');
+    expect(content).toContain('AskUserQuestion');
+    expect(content).toContain('multiSelect');
+  });
 });
 
 describe('scan-sessions skill chains to apply-observations', () => {
