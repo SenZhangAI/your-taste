@@ -18,7 +18,7 @@ function buildLanguageInstruction(lang) {
 // Everything before the first matching marker → system prompt, everything after → user message.
 const DATA_SEPARATORS = [
   '## Conversation Transcript',  // extract-signals prompt
-  '## Decision Points',          // synthesize-profile prompt
+  '## Reasoning Gaps',           // synthesize-profile prompt
 ];
 
 async function callLLM(promptTemplate, replacements, { timeoutMs, model } = {}) {
@@ -66,15 +66,23 @@ export async function extractSignals(conversationText) {
 
 // --- Pass 2: Synthesize profile from accumulated signals ---
 
-export async function synthesizeProfile(decisionPoints, existingObservations = null, tasteRuleTexts = [], model = null) {
+export async function synthesizeProfile(reasoningGaps, existingObservations = null, confirmedRuleTexts = [], model = null) {
   const promptTemplate = await readFile(
     new URL('../prompts/synthesize-profile.md', import.meta.url),
     'utf8',
   );
 
-  const signalsText = decisionPoints.map((dp, i) => {
-    let line = `${i + 1}. [${dp.strength}] ${dp.dimension}: AI proposed: ${dp.ai_proposed} → User: ${dp.user_reacted} → Principle: ${dp.principle}`;
-    if (dp.conditions) line += ` → Conditions: ${dp.conditions}`;
+  const signalsText = reasoningGaps.map((gap, i) => {
+    // New format: reasoning gap fields
+    if (gap.what_ai_did && gap.what_broke) {
+      let line = `${i + 1}. [${gap.category || 'verification_skip'}] AI did: ${gap.what_ai_did} → Broke: ${gap.what_broke}`;
+      if (gap.missing_step) line += ` → Missing step: ${gap.missing_step}`;
+      line += ` → Checkpoint: ${gap.checkpoint}`;
+      return line;
+    }
+    // Legacy fallback: decision point fields
+    let line = `${i + 1}. [${gap.strength || 'correction'}] AI proposed: ${gap.ai_proposed} → User: ${gap.user_reacted} → Principle: ${gap.principle}`;
+    if (gap.conditions) line += ` → Conditions: ${gap.conditions}`;
     return line;
   }).join('\n');
 
@@ -82,20 +90,17 @@ export async function synthesizeProfile(decisionPoints, existingObservations = n
   const t = getTemplates(lang);
 
   const existingSection = existingObservations
-    ? `## Existing Observations\n\nMerge new evidence into these existing observations. Re-evaluate all patterns against the combined evidence.\n\n${existingObservations}`
+    ? `## Existing Framework\n\nMerge new evidence into this existing framework. Re-evaluate all checkpoints against the combined evidence.\n\n${existingObservations}`
     : '';
 
-  const tasteSection = tasteRuleTexts.length > 0
-    ? `## Existing Confirmed Rules\n\nDo NOT duplicate these in Suggested Rules:\n${tasteRuleTexts.map(r => `- "${r}"`).join('\n')}`
+  const tasteSection = confirmedRuleTexts.length > 0
+    ? `## Existing Confirmed Rules\n\nDo NOT duplicate these in the framework:\n${confirmedRuleTexts.map(r => `- "${r}"`).join('\n')}`
     : '';
 
-  // Synthesis is heavier than extraction — needs to produce full Markdown from many decision points.
-  // 360s timeout accounts for the 4th section (Common Misreads) adding ~20% output.
   const response = await callLLM(promptTemplate, {
-    THINKING_PATTERNS_HEADER: t.thinkingPatternsHeader || 'Thinking Patterns',
-    WORKING_PRINCIPLES_HEADER: t.workingPrinciplesHeader || 'Working Principles',
-    SUGGESTED_RULES_HEADER: t.suggestedRulesHeader || 'Suggested Rules',
-    COMMON_MISREADS_HEADER: t.commonMisreadsHeader || 'Common Misreads',
+    REASONING_CHECKPOINTS_HEADER: t.reasoningCheckpointsHeader || 'Reasoning Checkpoints',
+    DOMAIN_REASONING_HEADER: t.domainReasoningHeader || 'Domain Reasoning',
+    FAILURE_PATTERNS_HEADER: t.failurePatternsHeader || 'Failure Patterns',
     EXISTING_OBSERVATIONS: existingSection,
     TASTE_RULES: tasteSection,
     LANGUAGE: buildLanguageInstruction(lang),
