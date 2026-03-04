@@ -65,6 +65,19 @@ export function extractSuggestedRules(markdown) {
 }
 
 /**
+ * Extract the Thinking Patterns section for UserPromptSubmit injection.
+ */
+export function extractThinkingPatterns(markdown) {
+  if (!markdown) return null;
+  const headers = ['Thinking Patterns', '思维模式'];
+  for (const h of headers) {
+    const section = extractSection(markdown, h);
+    if (section) return section;
+  }
+  return null;
+}
+
+/**
  * Remove specified rules from the Suggested Rules section.
  * Returns the full markdown with those rules removed.
  */
