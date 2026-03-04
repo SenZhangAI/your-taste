@@ -14,7 +14,7 @@ Your task: synthesize decision points from multiple coding sessions into an **op
 You receive:
 1. Decision points from multiple sessions (each has: ai_proposed, user_reacted, strength, dimension, principle, optional conditions)
 2. Existing observations (if any) to merge with
-3. Existing taste.md rules (to avoid duplicating in Suggested Rules)
+3. Existing confirmed rules (to avoid duplicating in Suggested Rules)
 
 ## Your Job
 
@@ -54,13 +54,13 @@ Requirements:
 
 ### Section 3: ## {{SUGGESTED_RULES_HEADER}}
 
-Actionable rules for review. After user approval, these merge into taste.md.
+Actionable rules for review. After user approval, these merge into CLAUDE.md.
 
 Requirements:
 - Short, actionable: "X over Y", "When X, do Y"
 - Include applicable conditions if the rule is context-dependent
 - Only from high-confidence patterns (3+ sessions)
-- Do NOT duplicate rules already in taste.md
+- Do NOT duplicate existing confirmed rules
 - Maximum 5 rules
 - Format: `- "rule text"`
 

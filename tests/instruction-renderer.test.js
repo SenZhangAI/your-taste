@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { renderFromObservations, renderInstructions } from '../src/instruction-renderer.js';
-import { createDefaultProfile } from '../src/profile.js';
+import { renderFromObservations } from '../src/instruction-renderer.js';
 
 describe('renderFromObservations', () => {
-  it('renders thinking patterns and behavioral patterns', () => {
+  it('renders working principles and common misreads, excludes thinking patterns', () => {
     const md = `## Thinking Patterns
 
 - **Execution simulation**: validates by running code mentally. (6 sessions, high confidence)
@@ -19,7 +18,7 @@ describe('renderFromObservations', () => {
 - "Act independently"`;
 
     const result = renderFromObservations(md);
-    expect(result).toContain('Execution simulation');
+    expect(result).not.toContain('Execution simulation');
     expect(result).toContain('Migration strategy');
     expect(result).not.toContain('Act independently');
   });
@@ -38,7 +37,7 @@ describe('renderFromObservations', () => {
 - "独立执行"`;
 
     const result = renderFromObservations(md);
-    expect(result).toContain('执行模拟');
+    expect(result).not.toContain('执行模拟');
     expect(result).toContain('迁移策略');
     expect(result).not.toContain('独立执行');
   });
@@ -47,14 +46,9 @@ describe('renderFromObservations', () => {
     expect(renderFromObservations(null)).toBeNull();
   });
 
-  it('returns null when observations has no patterns', () => {
+  it('returns null when observations has no renderable sections', () => {
     expect(renderFromObservations('## Suggested Rules\n\n- "rule"')).toBeNull();
-  });
-
-  it('renders with only thinking patterns', () => {
-    const md = '## Thinking Patterns\n\n- **Test**: content';
-    const result = renderFromObservations(md);
-    expect(result).toContain('Test');
+    expect(renderFromObservations('## Thinking Patterns\n\n- **Test**: content')).toBeNull();
   });
 
   it('renders with only behavioral patterns', () => {
@@ -62,19 +56,10 @@ describe('renderFromObservations', () => {
     const result = renderFromObservations(md);
     expect(result).toContain('Test');
   });
-});
 
-describe('renderInstructions fallback', () => {
-  it('returns null for default profile', () => {
-    const profile = createDefaultProfile();
-    expect(renderInstructions(profile)).toBeNull();
-  });
-
-  it('renders instruction for high-confidence dimension', () => {
-    const profile = createDefaultProfile();
-    profile.dimensions.risk_tolerance.score = 0.8;
-    profile.dimensions.risk_tolerance.confidence = 0.6;
-    const result = renderInstructions(profile);
-    expect(result).toContain('rewrite');
+  it('renders with only common misreads', () => {
+    const md = '## Common Misreads\n\n- Misread one';
+    const result = renderFromObservations(md);
+    expect(result).toContain('Misread one');
   });
 });

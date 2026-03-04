@@ -13,18 +13,23 @@ Understanding taste is one means. The full picture includes:
 ## Architecture: Observations-Based Learning
 
 ### Data Flow
-1. **Session end** — analyzer extracts observations from conversation transcript
-2. **observations.md** — primary output. Contains:
-   - **Thinking Patterns** — how the user reasons (abstract-first, traces full paths, etc.)
-   - **Behavioral Patterns** — preferences with context conditions (e.g. "prefers X when doing Y")
-   - **Suggested Rules** — candidate rules awaiting user review
-3. **taste.md** — user-reviewed rules promoted from Suggested Rules via `taste review`
-4. **profile.yaml** — optional display data (dimension scores). Not used for session injection when observations exist.
+1. **taste init** (batch) — two-pass pipeline: extract decision points → synthesize observations.md
+2. **SessionEnd** (incremental) — single-pass: extract strong signals → proposals.jsonl
+3. **taste review** — user confirms proposals → writes to CLAUDE.md managed section
 
-### Session Injection Priority
-1. **taste.md** (if exists) — user-confirmed rules, highest trust
-2. **observations.md patterns** — Thinking Patterns + Behavioral Patterns injected as learned context
-3. **profile.yaml dimensions** — legacy fallback only when neither taste.md nor observations exist
+### Core Files
+- **observations.md** — AI's working draft. Four sections:
+  - Thinking Patterns — how the user reasons (abstract-first, traces full paths, etc.)
+  - Working Principles — preferences with context conditions and motivation
+  - Suggested Rules — candidate rules for review
+  - Common Misreads — patterns AI gets wrong
+- **proposals.jsonl** — pending rule suggestions awaiting user review
+- **CLAUDE.md** (`<!-- your-taste:start/end -->`) — user-confirmed behavioral rules, consumed natively by Claude Code
+
+### Three-Layer Injection
+1. **CLAUDE.md** (native) — confirmed rules, read by Claude Code without hooks
+2. **SessionStart** (once) — Working Principles + Common Misreads from observations, project context
+3. **UserPromptSubmit** (every message) — thinking-framework.md + personalized Thinking Patterns + project context
 
 ### How to Apply Observations
 
@@ -40,4 +45,4 @@ Users think A → B → C then say C. When extracting preferences from behavior:
 - **Extract the underlying principle (A)**, not the surface action (C)
 - Example: user gives specific numeric counterexample → A is "systematic thinker who traces full paths", NOT "prefers concrete over abstract"
 - Behavioral signals reveal direction but can mislead about motivation
-- The extract-preferences prompt must always ask WHY, not just WHAT
+- The extract prompt must always ask WHY, not just WHAT

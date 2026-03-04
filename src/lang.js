@@ -68,21 +68,9 @@ export function languageName(code) {
  */
 const TEMPLATES = {
   en: {
-    // taste-file.js
-    tasteHeader: '# Your Taste',
     // global-context.js
     globalContextHeader: '# Cross-Project Focus',
     globalContextInjection: '### Cross-Project Focus',
-    // goal.js
-    goalHeader: '# Project Goal',
-    goalWhat: '## What',
-    goalWhatDesc: 'What is this project? One paragraph describing the core purpose.',
-    goalConstraints: '## Constraints',
-    goalConstraintsDesc: 'Non-negotiable boundaries (tech stack, performance requirements, compatibility).',
-    goalArchDecisions: '## Architecture Decisions',
-    goalArchDesc: 'Key technical decisions and WHY they were made.',
-    goalRejected: '## Rejected Approaches',
-    goalRejectedDesc: 'Approaches considered and rejected, with reasons.',
     // context.js
     contextHeader: '# Project Context',
     contextDecisions: '## Recent Decisions',
@@ -96,18 +84,8 @@ const TEMPLATES = {
     commonMisreadsHeader: 'Common Misreads',
   },
   zh: {
-    tasteHeader: '# 你的品味',
     globalContextHeader: '# 跨项目关注方向',
     globalContextInjection: '### 跨项目关注方向',
-    goalHeader: '# 项目目标',
-    goalWhat: '## 是什么',
-    goalWhatDesc: '这个项目是什么？用一段话描述核心目的。',
-    goalConstraints: '## 约束条件',
-    goalConstraintsDesc: '不可妥协的边界（技术栈、性能要求、兼容性）。',
-    goalArchDecisions: '## 架构决策',
-    goalArchDesc: '关键技术决策及其原因。',
-    goalRejected: '## 否决方案',
-    goalRejectedDesc: '考虑过但否决的方案，附原因。',
     contextHeader: '# 项目上下文',
     contextDecisions: '## 近期决策',
     contextQuestions: '## 待解决问题',
@@ -119,18 +97,8 @@ const TEMPLATES = {
     commonMisreadsHeader: '常见误读',
   },
   ja: {
-    tasteHeader: '# あなたのテイスト',
     globalContextHeader: '# クロスプロジェクト フォーカス',
     globalContextInjection: '### クロスプロジェクト フォーカス',
-    goalHeader: '# プロジェクト目標',
-    goalWhat: '## 概要',
-    goalWhatDesc: 'このプロジェクトは何ですか？核心的な目的を一段落で説明してください。',
-    goalConstraints: '## 制約条件',
-    goalConstraintsDesc: '妥協できない境界（技術スタック、パフォーマンス要件、互換性）。',
-    goalArchDecisions: '## アーキテクチャ決定',
-    goalArchDesc: '重要な技術的決定とその理由。',
-    goalRejected: '## 却下されたアプローチ',
-    goalRejectedDesc: '検討したが却下したアプローチとその理由。',
     contextHeader: '# プロジェクトコンテキスト',
     contextDecisions: '## 最近の決定',
     contextQuestions: '## 未解決の質問',

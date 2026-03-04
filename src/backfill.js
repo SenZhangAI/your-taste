@@ -5,9 +5,10 @@ import { join, dirname } from 'path';
 import { parseTranscript, extractConversation } from './transcript.js';
 import { filterSensitiveData } from './privacy.js';
 import { extractSignals, synthesizeProfile } from './analyzer.js';
-import { readObservations, writeObservations } from './observations.js';
-import { readTasteFile } from './taste-file.js';
+import { readObservations, writeObservations, extractSuggestedRules } from './observations.js';
 import { appendSignals, readAllSignals, collectForSynthesis, clearSignals } from './signals.js';
+import { readManagedRules } from './claudemd.js';
+import { appendProposal } from './proposals.js';
 import { hasLangFile, writeLang } from './lang.js';
 import { META_MARKER, loadConfig } from './llm.js';
 import { debug } from './debug.js';
@@ -333,10 +334,8 @@ export async function backfill(projectsDir, options = {}) {
   onProgress?.({ phase: 'pass2', total: total + skipCount });
 
   const existingObservations = await readObservations();
-  const tasteContent = await readTasteFile();
-  const tasteRules = tasteContent
-    ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
-    : [];
+  const claudeMdPath = `${process.env.HOME}/.claude/CLAUDE.md`;
+  const tasteRules = await readManagedRules(claudeMdPath);
 
   // Resolve synthesis model: CLI override > config.synthesisModel > default
   const config = await loadConfig();
@@ -366,9 +365,25 @@ export async function backfill(projectsDir, options = {}) {
     }
   }
 
+  let proposalCount = 0;
   if (observationsMarkdown) {
     await writeObservations(observationsMarkdown);
     debug(`backfill: wrote observations.md (${observationsMarkdown.length} chars)`);
+
+    // Extract suggested rules from observations → proposals.jsonl
+    const suggestedRules = extractSuggestedRules(observationsMarkdown);
+    for (const rule of suggestedRules) {
+      await appendProposal({
+        rule,
+        evidence: 'Synthesized from multiple sessions via taste:init',
+        source: 'taste:init',
+        scope: 'global',
+      });
+    }
+    proposalCount = suggestedRules.length;
+    if (proposalCount > 0) {
+      debug(`backfill: ${proposalCount} suggested rules added to proposals`);
+    }
   }
 
   // Mark all sessions as fully processed and clean up
@@ -376,5 +391,5 @@ export async function backfill(projectsDir, options = {}) {
   await saveProcessed(alreadyProcessed);
   await clearSignals();
 
-  return { observations: observationsMarkdown, extracted, skipped: skipped + skipCount, total: total + skipCount };
+  return { observations: observationsMarkdown, extracted, skipped: skipped + skipCount, total: total + skipCount, proposalCount };
 }

@@ -6,6 +6,7 @@ import {
   extractSection,
   extractSuggestedRules,
   removeSuggestedRules,
+  extractThinkingPatterns,
 } from '../src/observations.js';
 
 const TEST_DIR = '/tmp/your-taste-test-observations';
@@ -117,5 +118,25 @@ describe('observations', () => {
     expect(result).toContain('Another keeper');
     expect(result).not.toContain('Rule to remove');
     expect(result).toContain('Thinking Patterns');
+  });
+});
+
+describe('extractThinkingPatterns', () => {
+  it('extracts English thinking patterns section', () => {
+    const md = '## Thinking Patterns\n\nPattern 1\nPattern 2\n\n## Working Principles\n\nSomething';
+    expect(extractThinkingPatterns(md)).toBe('Pattern 1\nPattern 2');
+  });
+
+  it('extracts Chinese header', () => {
+    const md = '## 思维模式\n\n模式一\n\n## 工作原则\n\nSomething';
+    expect(extractThinkingPatterns(md)).toBe('模式一');
+  });
+
+  it('returns null when no thinking patterns section', () => {
+    expect(extractThinkingPatterns('## Other\n\nContent')).toBeNull();
+  });
+
+  it('returns null when markdown is null', () => {
+    expect(extractThinkingPatterns(null)).toBeNull();
   });
 });

@@ -8,35 +8,37 @@
 
 3. **Taste ≠ Skill.** We learn your *direction* (cautious vs bold, minimal vs comprehensive), not your *ability*. Your taste sets direction; professional quality is non-negotiable.
 
-4. **Behavior > Declaration (with limits).** We learn from what you *do*, not what you *say*. But behavior has a fidelity boundary: observing *what* doesn't always reveal *why*. That's why the system also infers underlying principles behind your actions.
+4. **Behavior > Declaration (with limits).** We learn from what you *do*, not what you *say*. But behavior has a fidelity boundary: observing *what* doesn't always reveal *why*. That's why the system also infers the underlying principles behind your actions.
 
 ---
 
 ## Current State (v0.4.0)
 
-your-taste is a **context accelerator** — it reduces the information gap between you and AI through four layers:
+your-taste is a **context accelerator** — it reduces the information gap between you and AI through three layers:
 
-### Preference Learning
-- 6-dimension Bayesian profiling (risk tolerance, complexity, autonomy, communication, quality vs speed, exploration)
-- Behavioral rule accumulation: silent observation → `pending.yaml` → user review → `taste.md`
-- Instruction rendering: dimension scores → concrete behavioral directives, confidence-gated
+### Observation-Based Learning
+- **Two-pass analysis pipeline**: Stage 1 extracts decision points per session, Stage 2 synthesizes narrative `observations.md`
+- **observations.md** four-section structure: Thinking Patterns (cognitive models), Working Principles (context-dependent preferences with motivation), Suggested Rules (review candidates), Common Misreads (AI error prevention)
+- **proposals.jsonl** stages rule suggestions from both `taste init` and SessionEnd for user review
+- **CLAUDE.md managed section** (`<!-- your-taste:start/end -->`) stores user-confirmed behavioral rules, consumed natively by Claude Code
 
 ### Project-Scoped Context
-- **`goal.md`** — Project vision, constraints, architectural decisions, rejected approaches (stable, user-authored)
 - **`context.md`** — Recent tactical decisions (FIFO 10), open questions, last session summary (auto-maintained)
 - **`global-context.md`** — Cross-project focus tracking (max 5 topics, 30-day TTL decay)
 - Project isolation via `~/.your-taste/projects/<name>/` directories
 
-### Intent Inference
-- **UserPromptSubmit hook** injects thinking framework on every message
-- Guides AI to trace from surface statement (C) back to underlying intent (A)
-- Priority-based injection: thinking framework > goal > project context > global context (4000-char budget)
+### Three-Layer Injection
+- **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
+- **SessionStart** (once per session) — Working Principles + Common Misreads from observations, project context, proposals notification
+- **UserPromptSubmit** (every message) — Thinking framework + personalized thinking patterns + project context + global focus (4KB budget, priority-based)
 
 ### Infrastructure
+- Multi-provider LLM support (Anthropic, OpenAI, DeepSeek, Gemini, Groq, Mistral, OpenRouter, Ollama, claude-max-proxy)
 - Privacy filter strips all PII before LLM analysis
-- `taste init` backfill from conversation history — instant profile in seconds
-- `taste show` with personality narratives
-- `taste review` for approving accumulated behavioral rules
+- `taste init` backfill from conversation history — instant observations in seconds
+- `taste review` for approving rule proposals into CLAUDE.md
+- Debug mode (`taste debug on/off/log`) for troubleshooting
+- 150 tests across 18 test files
 
 ---
 
@@ -44,14 +46,13 @@ your-taste is a **context accelerator** — it reduces the information gap betwe
 
 Focus on proving the context accelerator value before expanding scope.
 
-- **A→C inference few-shot examples** — Improve Haiku's ability to extract underlying principles, not surface behavior
-- **Decision promotion** — Detect repeated tactical decisions → suggest promotion to `goal.md` (reuse taste review pattern)
-- **Taste-aware thinking instructions** — Personalize the thinking framework based on user's dimension profile
-- **Goal auto-suggestions** — When context patterns repeat across sessions, proactively suggest goal.md entries
+- **A→C inference few-shot examples** — Improve extraction of underlying principles, not surface behavior
+- **Design principles auto-extraction** — Detect project-level design statements → proposals.jsonl (scope=design) → CLAUDE.md managed section
+- **Taste-aware thinking instructions** — Personalize the thinking framework based on observations
 
 ## Later: Growth
 
-- **Taste cards** — Shareable radar chart + personality narratives (requires proven-accurate profiles)
+- **Taste cards** — Shareable profile visualization + personality narratives
 - **Community launch** — Show HN, r/ClaudeAI, awesome-claude-code
 - **npm publish** — Official package release
 
@@ -60,7 +61,7 @@ Focus on proving the context accelerator value before expanding scope.
 - Multi-source adapters (Cursor, Codex, Copilot, OpenClaw)
 - Evidence-based sync (append-only evidence log, CRDT-native merge)
 - Team profiles — composite team preference profiles
-- Dynamic dimension discovery — beyond fixed 6 dimensions
+- Dynamic dimension discovery
 
 ---
 

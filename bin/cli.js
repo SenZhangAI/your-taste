@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 import { backfill } from '../src/backfill.js';
-import { readProfile } from '../src/profile.js';
-import { DIMENSIONS, getNarrative } from '../src/dimensions.js';
-import { readPending, removePendingRules } from '../src/pending.js';
-import { readTasteFile, appendRules } from '../src/taste-file.js';
 import { readObservations, writeObservations } from '../src/observations.js';
-import { loadGoal, createGoalTemplate } from '../src/goal.js';
+import { readProposals, removeProposals } from '../src/proposals.js';
+import { readManagedRules, appendManagedRules } from '../src/claudemd.js';
 import { loadProjectContext } from '../src/context.js';
 import { loadGlobalContext } from '../src/global-context.js';
 import { ensureProjectDir } from '../src/project.js';
@@ -36,8 +33,6 @@ if (command === 'init') {
   await runReviewApply();
 } else if (command === 'status') {
   await runStatus();
-} else if (command === 'goal') {
-  await runGoal();
 } else if (command === 'lang') {
   await runLang();
 } else if (command === 'synthesize') {
@@ -57,7 +52,6 @@ if (command === 'init') {
   console.log('    --signals <p>   Use specific signals file');
   console.log('    --model <m>     Override model for synthesis');
   console.log('  status            Show what your-taste knows about you and this project');
-  console.log('  goal              Show goal file path for current project (creates template if needed)');
   console.log('  review-data       Output pending rules as JSON (for skills)');
   console.log('  review-apply      Apply review decisions from stdin JSON (for skills)');
   console.log('  lang [code]       Show or set preferred language (zh, en, ja, ...)');
@@ -150,9 +144,8 @@ async function runInit() {
     console.log('Observations saved to ~/.your-taste/observations.md');
   }
 
-  const tasteContent = await readTasteFile();
-  if (tasteContent) {
-    console.log('Behavioral rules: ~/.your-taste/taste.md');
+  if (result.proposalCount > 0) {
+    console.log(`${result.proposalCount} rule proposals added. Run \`taste review\` to review.`);
   }
 }
 
@@ -165,41 +158,25 @@ async function runShow() {
     console.log('');
   }
 
-  const profile = await readProfile();
-
-  console.log('Your Taste Profile');
-  console.log('\u2550'.repeat(18) + '\n');
-
-  let hasData = false;
-  for (const [key, dim] of Object.entries(profile.dimensions)) {
-    if (dim.evidence_count === 0) continue;
-    hasData = true;
-
-    const barLen = Math.round(dim.score * 10);
-    const bar = '\u2588'.repeat(barLen) + '\u2591'.repeat(10 - barLen);
-    const label = dim.score < 0.35 ? 'low' : dim.score > 0.65 ? 'high' : 'balanced';
-    const confPct = Math.round(dim.confidence * 100);
-    const name = key.padEnd(20);
-
-    console.log(`${name} ${bar}  ${dim.score.toFixed(2)}  ${label.padEnd(10)} (${dim.evidence_count} obs, confidence: ${confPct}%)`);
-
-    const narrative = getNarrative(key, dim.score);
-    if (narrative && dim.confidence >= 0.3) {
-      console.log(`  ${narrative}`);
-    } else {
-      console.log('  (not enough data yet)');
+  const claudeMdPath = `${process.env.HOME}/.claude/CLAUDE.md`;
+  const rules = await readManagedRules(claudeMdPath);
+  if (rules.length > 0) {
+    console.log('CLAUDE.md Rules (confirmed)');
+    console.log('\u2550'.repeat(26) + '\n');
+    for (const rule of rules) {
+      console.log(`- ${rule}`);
     }
-    console.log();
+    console.log('');
   }
 
-  if (!hasData) {
-    console.log('No profile data yet. Run `taste init` to scan past sessions.');
+  if (!observations && rules.length === 0) {
+    console.log('No data yet. Run `taste init` to scan past sessions.');
   }
 }
 
 async function runReviewData() {
-  const pending = await readPending();
-  console.log(JSON.stringify(pending, null, 2));
+  const proposals = await readProposals();
+  console.log(JSON.stringify({ proposals }, null, 2));
 }
 
 async function runReviewApply() {
@@ -215,18 +192,18 @@ async function runReviewApply() {
     console.error(JSON.stringify({ error: 'Invalid JSON input' }));
     process.exit(1);
   }
-  const pending = await readPending();
 
-  // Apply accepted rules to taste.md
   const accepted = decisions.accepted || [];
   const edited = (decisions.edited || []).map(e => e.revised);
   const allApproved = [...accepted, ...edited];
 
+  // Write approved rules to CLAUDE.md
   if (allApproved.length > 0) {
-    await appendRules(allApproved);
+    const claudeMdPath = `${process.env.HOME}/.claude/CLAUDE.md`;
+    await appendManagedRules(claudeMdPath, allApproved);
   }
 
-  // Remove accepted, edited originals, and dismissed from pending
+  // Remove all processed proposals
   const toRemove = [
     ...accepted,
     ...(decisions.edited || []).map(e => e.original),
@@ -234,30 +211,29 @@ async function runReviewApply() {
   ];
 
   if (toRemove.length > 0) {
-    await removePendingRules(pending, toRemove);
+    await removeProposals(toRemove);
   }
 
   console.log(JSON.stringify({ applied: allApproved.length, dismissed: (decisions.dismissed || []).length }));
 }
 
 async function runStatus() {
-  const profile = await readProfile();
-  const activeDims = Object.values(profile.dimensions).filter(d => d.confidence > 0.3);
-  const tasteContent = await readTasteFile();
-
   console.log('your-taste status');
   console.log('═'.repeat(18) + '\n');
 
-  // Profile
-  const dimCount = activeDims.length;
-  const ruleCount = tasteContent ? tasteContent.split('\n').filter(l => l.startsWith('- ')).length : 0;
-  console.log(`Profile:     ${dimCount} dimensions active, ${ruleCount} behavioral rules`);
+  // Observations
+  const observations = await readObservations();
+  console.log(`Observations: ${observations ? 'present' : 'not yet'}`);
 
-  // Pending rules
-  const pending = await readPending();
-  const pendingCount = pending.rules ? pending.rules.length : 0;
-  if (pendingCount > 0) {
-    console.log(`Pending:     ${pendingCount} rules awaiting review (run: taste review)`);
+  // CLAUDE.md rules
+  const claudeMdPath = `${process.env.HOME}/.claude/CLAUDE.md`;
+  const rules = await readManagedRules(claudeMdPath);
+  console.log(`CLAUDE.md:   ${rules.length} confirmed rules`);
+
+  // Proposals
+  const proposals = await readProposals();
+  if (proposals.length > 0) {
+    console.log(`Proposals:   ${proposals.length} awaiting review (run: taste review)`);
   }
 
   // Project context
@@ -269,13 +245,10 @@ async function runStatus() {
   }
 
   if (projectDir) {
-    const goal = await loadGoal(projectDir);
     const ctx = await loadProjectContext(projectDir);
-    const hasGoal = !!goal;
     const decisionCount = ctx.decisions.length;
     const questionCount = ctx.open_questions.length;
 
-    console.log(`Goal:        ${hasGoal ? 'set' : 'not set'}`);
     console.log(`Context:     ${decisionCount} decisions, ${questionCount} open questions`);
     if (ctx.last_session) {
       console.log(`Last session: ${ctx.last_session}`);
@@ -294,25 +267,6 @@ async function runStatus() {
   }
 
   console.log('');
-}
-
-async function runGoal() {
-  let projectDir;
-  try {
-    projectDir = await ensureProjectDir(process.cwd());
-  } catch {
-    console.error('Could not determine project directory for current path.');
-    process.exit(1);
-  }
-
-  const { path, created } = await createGoalTemplate(projectDir);
-
-  if (created) {
-    console.log(`Created goal template: ${path}`);
-    console.log('Edit this file to set your project vision, constraints, and architectural decisions.');
-  } else {
-    console.log(`Goal file: ${path}`);
-  }
 }
 
 async function runLang() {
@@ -393,10 +347,8 @@ async function runSynthesize() {
   console.log(`Synthesizing from ${decisionPoints.length} decision points...`);
 
   const existingObservations = await readObservations();
-  const tasteContent = await readTasteFile();
-  const tasteRules = tasteContent
-    ? (tasteContent.match(/^- .+$/gm) || []).map(r => r.slice(2))
-    : [];
+  const claudeMdPath = `${process.env.HOME}/.claude/CLAUDE.md`;
+  const tasteRules = await readManagedRules(claudeMdPath);
 
   try {
     const result = await synthesizeProfile(decisionPoints, existingObservations, tasteRules, flags.model);

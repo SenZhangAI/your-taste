@@ -25,15 +25,6 @@ describe('user-prompt hook priority-based injection', () => {
     expect(result).toContain('Intent Inference');
   });
 
-  it('includes goal content when available', async () => {
-    const projectDir = await ensureProjectDir('/test/project');
-    await writeFile(join(projectDir, 'goal.md'), '# Project Goal\n\n## What\nTest plugin', 'utf8');
-
-    const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
-    expect(result).toContain('Test plugin');
-  });
-
   it('includes project context when available', async () => {
     const projectDir = await ensureProjectDir('/test/project2');
     await writeFile(join(projectDir, 'context.md'), '# Project Context\n\n## Recent Decisions\n- [2026-02-28] test decision\n', 'utf8');
@@ -52,10 +43,37 @@ describe('user-prompt hook priority-based injection', () => {
     expect(result).toContain('cross-project topic');
   });
 
+  it('enhances framework with thinking patterns from observations', async () => {
+    await writeFile(join(dir, 'observations.md'), [
+      '## Thinking Patterns',
+      '',
+      '- **Abstract-first reasoning**: derives specifics from principles',
+      '',
+      '## Working Principles',
+      '',
+      '- Other content',
+    ].join('\n'), 'utf8');
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Intent Inference');
+    expect(result).toContain("This User's Thinking Patterns");
+    expect(result).toContain('Abstract-first reasoning');
+    expect(result).not.toContain('Other content');
+  });
+
+  it('works without observations file', async () => {
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Intent Inference');
+    expect(result).not.toContain("This User's Thinking Patterns");
+  });
+
   it('drops lower-priority content when exceeding max chars', async () => {
     const projectDir = await ensureProjectDir('/test/project3');
-    const largeGoal = '# Goal\n\n' + 'x'.repeat(3000);
-    await writeFile(join(projectDir, 'goal.md'), largeGoal, 'utf8');
     const largeContext = '# Context\n\n## Recent Decisions\n' + Array.from({ length: 20 }, (_, i) => `- [2026-02-28] ${'y'.repeat(200)} ${i}`).join('\n');
     await writeFile(join(projectDir, 'context.md'), largeContext, 'utf8');
 
