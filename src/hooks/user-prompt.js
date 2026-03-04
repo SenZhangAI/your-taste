@@ -4,6 +4,7 @@ import { loadGoal, renderGoalForInjection } from '../goal.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { loadGlobalContext, renderGlobalContext } from '../global-context.js';
 import { ensureProjectDir } from '../project.js';
+import { readObservations, extractThinkingPatterns } from '../observations.js';
 import { debug } from '../debug.js';
 
 const MAX_CHARS = 4000;
@@ -19,6 +20,15 @@ export async function buildUserPromptContext(projectDir) {
   } catch {
     // Template missing — degrade gracefully
   }
+
+  // Enhance P1 with personalized thinking patterns from observations
+  try {
+    const observations = await readObservations();
+    const thinkingPatterns = extractThinkingPatterns(observations);
+    if (thinkingPatterns) {
+      framework += `\n\n## This User's Thinking Patterns\n\n${thinkingPatterns}`;
+    }
+  } catch { /* no observations */ }
 
   // P2: Project goal
   let goalText = null;

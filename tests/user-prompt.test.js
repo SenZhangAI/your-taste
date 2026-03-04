@@ -52,6 +52,35 @@ describe('user-prompt hook priority-based injection', () => {
     expect(result).toContain('cross-project topic');
   });
 
+  it('enhances framework with thinking patterns from observations', async () => {
+    await writeFile(join(dir, 'observations.md'), [
+      '## Thinking Patterns',
+      '',
+      '- **Abstract-first reasoning**: derives specifics from principles',
+      '',
+      '## Working Principles',
+      '',
+      '- Other content',
+    ].join('\n'), 'utf8');
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Intent Inference');
+    expect(result).toContain("This User's Thinking Patterns");
+    expect(result).toContain('Abstract-first reasoning');
+    expect(result).not.toContain('Other content');
+  });
+
+  it('works without observations file', async () => {
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Intent Inference');
+    expect(result).not.toContain("This User's Thinking Patterns");
+  });
+
   it('drops lower-priority content when exceeding max chars', async () => {
     const projectDir = await ensureProjectDir('/test/project3');
     const largeGoal = '# Goal\n\n' + 'x'.repeat(3000);
