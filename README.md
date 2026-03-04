@@ -59,9 +59,9 @@ We learn from what you *do*, not what you *say*. Your corrections, your choices,
 ```
 Session ends → Read transcript → Filter PII → Extract decision points → Synthesize observations
                                                                           ↓
-Every message → Inject thinking framework + project goal + recent context
+Every message → Inject thinking framework + recent context
                                                                           ↓
-Session starts → Load observations + goal.md + context.md → AI starts informed
+Session starts → Load observations + context.md → AI starts informed
 ```
 
 **Learning (two channels)**
@@ -76,7 +76,7 @@ Session starts → Load observations + goal.md + context.md → AI starts inform
 
 1. **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
 2. **SessionStart** — Working Principles + Common Misreads from observations + project context
-3. **UserPromptSubmit** — Thinking framework + personalized thinking patterns + goal + context on every message
+3. **UserPromptSubmit** — Thinking framework + personalized thinking patterns + project context on every message
 
 ## Quick Start
 
@@ -125,7 +125,6 @@ cd your-taste && npm install
 What IS stored (`~/.your-taste/`):
 - `observations.md` — Thinking patterns, behavioral patterns with context conditions, suggested rules
 - `global-context.md` — Cross-project focus topics (what you're working on across projects)
-- `projects/<name>/goal.md` — Project vision and constraints (user-authored)
 - `projects/<name>/context.md` — Recent tactical decisions and open questions (auto-maintained)
 - `proposals.jsonl` — Pending rule suggestions awaiting review
 - `config.yaml` — LLM provider configuration

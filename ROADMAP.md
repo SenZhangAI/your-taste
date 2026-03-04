@@ -23,7 +23,6 @@ your-taste is a **context accelerator** — it reduces the information gap betwe
 - **CLAUDE.md managed section** (`<!-- your-taste:start/end -->`) stores user-confirmed behavioral rules, consumed natively by Claude Code
 
 ### Project-Scoped Context
-- **`goal.md`** — Project vision, constraints, architectural decisions, rejected approaches (stable, user-authored)
 - **`context.md`** — Recent tactical decisions (FIFO 10), open questions, last session summary (auto-maintained)
 - **`global-context.md`** — Cross-project focus tracking (max 5 topics, 30-day TTL decay)
 - Project isolation via `~/.your-taste/projects/<name>/` directories
@@ -31,7 +30,7 @@ your-taste is a **context accelerator** — it reduces the information gap betwe
 ### Three-Layer Injection
 - **CLAUDE.md** (native) — Confirmed behavioral rules, consumed by Claude Code without hooks
 - **SessionStart** (once per session) — Working Principles + Common Misreads from observations, project context, proposals notification
-- **UserPromptSubmit** (every message) — Thinking framework + personalized thinking patterns + goal + context + global focus (4KB budget, priority-based)
+- **UserPromptSubmit** (every message) — Thinking framework + personalized thinking patterns + project context + global focus (4KB budget, priority-based)
 
 ### Infrastructure
 - Multi-provider LLM support (Anthropic, OpenAI, DeepSeek, Gemini, Groq, Mistral, OpenRouter, Ollama, claude-max-proxy)
@@ -39,7 +38,7 @@ your-taste is a **context accelerator** — it reduces the information gap betwe
 - `taste init` backfill from conversation history — instant observations in seconds
 - `taste review` for approving rule proposals into CLAUDE.md
 - Debug mode (`taste debug on/off/log`) for troubleshooting
-- 157 tests across 19 test files
+- 150 tests across 18 test files
 
 ---
 
@@ -48,9 +47,8 @@ your-taste is a **context accelerator** — it reduces the information gap betwe
 Focus on proving the context accelerator value before expanding scope.
 
 - **A→C inference few-shot examples** — Improve extraction of underlying principles, not surface behavior
-- **Decision promotion** — Detect repeated tactical decisions → suggest promotion to `goal.md`
+- **Design principles auto-extraction** — Detect project-level design statements → proposals.jsonl (scope=design) → CLAUDE.md managed section
 - **Taste-aware thinking instructions** — Personalize the thinking framework based on observations
-- **Goal auto-suggestions** — When context patterns repeat across sessions, proactively suggest goal.md entries
 
 ## Later: Growth
 

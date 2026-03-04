@@ -29,7 +29,7 @@ Understanding taste is one means. The full picture includes:
 ### Three-Layer Injection
 1. **CLAUDE.md** (native) — confirmed rules, read by Claude Code without hooks
 2. **SessionStart** (once) — Working Principles + Common Misreads from observations, project context
-3. **UserPromptSubmit** (every message) — thinking-framework.md + personalized Thinking Patterns + goal + context
+3. **UserPromptSubmit** (every message) — thinking-framework.md + personalized Thinking Patterns + project context
 
 ### How to Apply Observations
 
