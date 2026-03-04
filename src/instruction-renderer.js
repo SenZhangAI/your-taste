@@ -9,28 +9,34 @@ export function renderFromObservations(observationsMarkdown) {
 
   const sections = [];
 
-  // Thinking Patterns excluded — injected by UserPromptSubmit hook instead
-  const principlesHeaders = ['Working Principles', '工作原则', 'Behavioral Patterns', '行为模式'];
-  const misreadsHeaders = ['Common Misreads', '常见误读'];
+  // Reasoning Checkpoints excluded — injected by UserPromptSubmit hook instead
 
-  let principles = null;
-  let principlesLabel = 'Working Principles';
-  for (const h of principlesHeaders) {
-    principles = extractSection(observationsMarkdown, h);
-    if (principles) {
-      principlesLabel = h;
+  // Domain Reasoning (new) + Working Principles / Behavioral Patterns (legacy)
+  const domainHeaders = ['Domain Reasoning', '领域推理', 'Working Principles', '工作原则', 'Behavioral Patterns', '行为模式'];
+  let domain = null;
+  let domainLabel = 'Domain Reasoning';
+  for (const h of domainHeaders) {
+    domain = extractSection(observationsMarkdown, h);
+    if (domain) {
+      domainLabel = h;
       break;
     }
   }
 
-  let misreads = null;
-  for (const h of misreadsHeaders) {
-    misreads = extractSection(observationsMarkdown, h);
-    if (misreads) break;
+  // Failure Patterns (new) + Common Misreads (legacy)
+  const failureHeaders = ['Failure Patterns', '失败模式', 'Common Misreads', '常见误读'];
+  let failures = null;
+  let failureLabel = 'Failure Patterns';
+  for (const h of failureHeaders) {
+    failures = extractSection(observationsMarkdown, h);
+    if (failures) {
+      failureLabel = h;
+      break;
+    }
   }
 
-  if (principles) sections.push(`### ${principlesLabel}\n\n${principles}`);
-  if (misreads) sections.push(`### Common Misreads\n\n${misreads}`);
+  if (domain) sections.push(`### ${domainLabel}\n\n${domain}`);
+  if (failures) sections.push(`### ${failureLabel}\n\n${failures}`);
 
   if (sections.length === 0) return null;
 

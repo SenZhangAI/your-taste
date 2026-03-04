@@ -7,6 +7,7 @@ import {
   extractSuggestedRules,
   removeSuggestedRules,
   extractThinkingPatterns,
+  extractReasoningCheckpoints,
 } from '../src/observations.js';
 
 const TEST_DIR = '/tmp/your-taste-test-observations';
@@ -121,7 +122,37 @@ describe('observations', () => {
   });
 });
 
-describe('extractThinkingPatterns', () => {
+describe('extractReasoningCheckpoints', () => {
+  it('extracts English "Reasoning Checkpoints" section', () => {
+    const md = '## Reasoning Checkpoints\n\nCheckpoint 1\nCheckpoint 2\n\n## Domain Reasoning\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('Checkpoint 1\nCheckpoint 2');
+  });
+
+  it('extracts Chinese "推理检查点" section', () => {
+    const md = '## 推理检查点\n\n检查点一\n\n## 领域推理\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('检查点一');
+  });
+
+  it('falls back to legacy "Thinking Patterns" header', () => {
+    const md = '## Thinking Patterns\n\nPattern 1\n\n## Other\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('Pattern 1');
+  });
+
+  it('falls back to legacy "思维模式" header', () => {
+    const md = '## 思维模式\n\n模式一\n\n## Other\n\nSomething';
+    expect(extractReasoningCheckpoints(md)).toBe('模式一');
+  });
+
+  it('returns null when no matching section', () => {
+    expect(extractReasoningCheckpoints('## Other\n\nContent')).toBeNull();
+  });
+
+  it('returns null when markdown is null', () => {
+    expect(extractReasoningCheckpoints(null)).toBeNull();
+  });
+});
+
+describe('extractThinkingPatterns (deprecated)', () => {
   it('extracts English thinking patterns section', () => {
     const md = '## Thinking Patterns\n\nPattern 1\nPattern 2\n\n## Working Principles\n\nSomething';
     expect(extractThinkingPatterns(md)).toBe('Pattern 1\nPattern 2');

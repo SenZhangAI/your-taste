@@ -3,31 +3,35 @@ import { readFile } from 'fs/promises';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { loadGlobalContext, renderGlobalContext } from '../global-context.js';
 import { ensureProjectDir } from '../project.js';
-import { readObservations, extractThinkingPatterns } from '../observations.js';
+import { readObservations, extractReasoningCheckpoints } from '../observations.js';
 import { debug } from '../debug.js';
 
 const MAX_CHARS = 4000;
 
 export async function buildUserPromptContext(projectDir) {
-  // P1: Thinking framework (always included)
+  // P1: Reasoning checkpoints (evolved) or static framework (bootstrap)
   let framework = '';
-  try {
-    framework = await readFile(
-      new URL('../../prompts/thinking-framework.md', import.meta.url),
-      'utf8',
-    );
-  } catch {
-    // Template missing — degrade gracefully
-  }
 
-  // Enhance P1 with personalized thinking patterns from observations
+  // Try evolved checkpoints from observations first
   try {
     const observations = await readObservations();
-    const thinkingPatterns = extractThinkingPatterns(observations);
-    if (thinkingPatterns) {
-      framework += `\n\n## This User's Thinking Patterns\n\n${thinkingPatterns}`;
+    const checkpoints = extractReasoningCheckpoints(observations);
+    if (checkpoints) {
+      framework = `## Reasoning Checkpoints\n\n${checkpoints}`;
     }
   } catch { /* no observations */ }
+
+  // Fall back to static thinking framework if no evolved checkpoints
+  if (!framework) {
+    try {
+      framework = await readFile(
+        new URL('../../prompts/thinking-framework.md', import.meta.url),
+        'utf8',
+      );
+    } catch {
+      // Template missing — degrade gracefully
+    }
+  }
 
   // P2: Project context
   let projectCtxText = null;
@@ -85,6 +89,7 @@ async function main() {
   const additionalContext = await buildUserPromptContext(projectDir);
   if (!additionalContext) {
     debug('user-prompt: no context to inject');
+    console.log(JSON.stringify({ result: 'your-taste: no context' }));
     process.exit(0);
   }
 
@@ -96,5 +101,6 @@ async function main() {
 
 main().catch((e) => {
   debug(`user-prompt: fatal error — ${e.message}\n${e.stack}`);
+  console.log(JSON.stringify({ result: `your-taste: prompt error — ${e.message}` }));
   process.exit(0);
 });
