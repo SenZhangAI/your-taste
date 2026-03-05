@@ -21,6 +21,14 @@ function isTimeoutError(err) {
   return /timed? ?out|timeout|504/i.test(err.message);
 }
 
+function isRateLimitError(err) {
+  return /\b429\b/.test(err.message);
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Sessions smaller than this are almost always junk (session starts without real interaction).
 // Viable sessions are typically 14KB+; junk (too few messages, too short) median 5-7KB.
 const MIN_FILE_SIZE = 10_000;
@@ -272,51 +280,91 @@ export async function backfill(projectsDir, options = {}) {
   // --- Pass 1: Extract decision points per session ---
   let extracted = pass1Resumed;
   let skipped = 0;
-  let consecutiveFailures = 0;
+  let recentFailures = 0;  // failures in the most recent batch
   let langDetected = false;
+  let aborted = false;
 
-  for (let i = 0; i < needPass1.length; i++) {
-    const sessionPath = needPass1[i];
+  const concurrency = options.concurrency || 1;
+  debug(`backfill: concurrency = ${concurrency}`);
 
-    try {
-      const result = await pass1Session(sessionPath);
-      if (result && result.reasoningGaps.length > 0) {
-        await appendSignals(sessionPath, result.reasoningGaps, result.context);
-        extracted++;
-      } else {
-        // No decision points but session was processed — record to avoid re-processing
-        await appendSignals(sessionPath, [], result?.context || null);
-        skipped++;
-      }
+  // Serialize appendSignals calls to prevent interleaved writes
+  let writeChain = Promise.resolve();
+  function safeAppend(sessionPath, gaps, context) {
+    writeChain = writeChain.then(() => appendSignals(sessionPath, gaps, context));
+    return writeChain;
+  }
 
-      // Auto-detect language from first session that reports one
-      if (!langDetected && result?.userLanguage) {
-        langDetected = true;
-        if (!(await hasLangFile())) {
-          await writeLang(result.userLanguage);
-          debug(`backfill: auto-detected language "${result.userLanguage}"`);
+  const RATE_LIMIT_BACKOFF_MS = 10_000;
+  const MAX_RATE_LIMIT_RETRIES = 3;
+
+  for (let batchStart = 0; batchStart < needPass1.length && !aborted; batchStart += concurrency) {
+    const batch = needPass1.slice(batchStart, batchStart + concurrency);
+
+    // Process batch, collecting rate-limited sessions for retry
+    let toRun = batch.map(sessionPath => ({ sessionPath, retries: 0 }));
+
+    while (toRun.length > 0) {
+      const results = await Promise.allSettled(toRun.map(async ({ sessionPath }) => {
+        const result = await pass1Session(sessionPath);
+        return { sessionPath, result };
+      }));
+
+      const retryQueue = [];
+
+      for (let j = 0; j < results.length; j++) {
+        const settled = results[j];
+        const { retries } = toRun[j];
+
+        if (settled.status === 'fulfilled') {
+          const { sessionPath, result } = settled.value;
+          if (result && result.reasoningGaps.length > 0) {
+            await safeAppend(sessionPath, result.reasoningGaps, result.context);
+            extracted++;
+          } else {
+            await safeAppend(sessionPath, [], result?.context || null);
+            skipped++;
+          }
+
+          if (!langDetected && result?.userLanguage) {
+            langDetected = true;
+            if (!(await hasLangFile())) {
+              await writeLang(result.userLanguage);
+              debug(`backfill: auto-detected language "${result.userLanguage}"`);
+            }
+          }
+
+          recentFailures = 0;
+        } else if (isRateLimitError(settled.reason) && retries < MAX_RATE_LIMIT_RETRIES) {
+          debug(`pass1: rate-limited, will retry (attempt ${retries + 1}/${MAX_RATE_LIMIT_RETRIES})`);
+          retryQueue.push({ sessionPath: toRun[j].sessionPath, retries: retries + 1 });
+        } else {
+          debug(`pass1: FAILED — ${settled.reason?.message}`);
+          skipped++;
+          recentFailures++;
         }
       }
 
-      consecutiveFailures = 0;
-    } catch (err) {
-      debug(`pass1: FAILED ${sessionPath} — ${err.message}`);
-      skipped++;
-      consecutiveFailures++;
-
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        debug(`backfill: aborting Pass 1 — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
-        onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1, aborted: true });
-        // If no sessions were ever successfully extracted, this is a configuration error
-        // (wrong API key, no provider, etc.) — surface it instead of silently returning null.
-        if (extracted === 0) {
-          throw new Error(err.message);
-        }
-        break;
+      if (retryQueue.length > 0) {
+        debug(`backfill: waiting ${RATE_LIMIT_BACKOFF_MS / 1000}s before retrying ${retryQueue.length} rate-limited sessions`);
+        await sleep(RATE_LIMIT_BACKOFF_MS);
       }
+
+      toRun = retryQueue;
     }
 
-    onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: i + 1 + pass1Resumed + skipCount });
+    if (recentFailures >= MAX_CONSECUTIVE_FAILURES) {
+      debug(`backfill: aborting Pass 1 — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
+      const current = Math.min(batchStart + batch.length, needPass1.length);
+      onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: current + pass1Resumed + skipCount, aborted: true });
+      if (extracted === 0) {
+        throw new Error('All sessions failed');
+      }
+      aborted = true;
+      break;
+    }
+
+    const current = Math.min(batchStart + batch.length, needPass1.length);
+    onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: current + pass1Resumed + skipCount });
   }
 
   // --- Pass 2: Unified synthesis → observations.md ---

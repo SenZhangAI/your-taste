@@ -46,6 +46,7 @@ if (command === 'init') {
   console.log('    --all           Scan all sessions (slow, higher cost)');
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
+  console.log('    --concurrency <N> Process N sessions in parallel (default: 1)');
   console.log('  show              Display your taste profile');
   console.log('  synthesize        Re-run Stage 2 synthesis from existing signals');
   console.log('    --dry-run       Output to stdout instead of writing observations.md');
@@ -64,6 +65,7 @@ if (command === 'init') {
 function parseInitFlags() {
   const args = process.argv.slice(3);
   const filter = {};
+  let concurrency = 1;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--all') {
@@ -72,14 +74,16 @@ function parseInitFlags() {
       filter.days = parseInt(args[++i], 10);
     } else if (args[i] === '--max' && args[i + 1]) {
       filter.maxSessions = parseInt(args[++i], 10);
+    } else if (args[i] === '--concurrency' && args[i + 1]) {
+      concurrency = Math.max(1, parseInt(args[++i], 10));
     }
   }
 
-  return filter;
+  return { filter, concurrency };
 }
 
 async function runInit() {
-  const filter = parseInitFlags();
+  const { filter, concurrency } = parseInitFlags();
 
   if (filter.all) {
     console.log('Scanning ALL past sessions (--all)...\n');
@@ -97,6 +101,7 @@ async function runInit() {
   try {
     result = await backfill(PROJECTS_DIR, {
       filter,
+      concurrency,
       currentProjectPath: process.cwd(),
       onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
         if (a) { aborted = true; return; }
