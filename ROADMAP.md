@@ -1,34 +1,35 @@
 # Roadmap
 
-## Current: v1.0 — Thinking Quality Optimizer
+See [MILESTONE.md](MILESTONE.md) for completed milestones and known issues.
 
-your-taste detects reasoning gaps in AI sessions and synthesizes a thinking framework that prevents the same mistakes. The framework has three sections:
+## Current: v1.1 — Publication Ready
 
-1. **Reasoning Checkpoints** — Verification steps before acting
-2. **Domain Reasoning** — Context-specific thinking rules
-3. **Failure Patterns** — Recurring reasoning errors with root causes
+**Goal:** Make your-taste installable and usable by anyone with a Claude Code subscription.
 
-Five gap categories: `verification_skip`, `breadth_miss`, `depth_skip`, `assumption_leak`, `overreach`.
+### P0 — Blockers for public release
 
-### Infrastructure
-- Multi-provider LLM (Anthropic, OpenAI, DeepSeek, Gemini, Groq, Mistral, OpenRouter, Ollama, claude-max-proxy)
-- Three-layer injection (CLAUDE.md rules, SessionStart domain context, UserPromptSubmit checkpoints)
-- Privacy filter strips PII before analysis
-- `taste init` for instant framework from history, `taste review` for rule proposals
+- [ ] **Dogfood the incremental loop** — Run SessionEnd hook across 10+ real sessions, verify signals accumulate and framework evolves correctly. This is the core value loop; it must work before anyone else tries it.
+- [ ] **Graceful error handling** — Init scan failure (fetch failed mid-scan) must recover and report partial results, not crash. All error messages must tell the user what to do next.
+- [ ] **LLM provider story** — Verify the env-var auto-detection path works for users without custom proxy setups. Document the simplest path (set ANTHROPIC_API_KEY, done). Remove claude-cli-proxy as implicit dependency.
+
+### P1 — Quality of life
+
+- [ ] **Init resilience** — Resume interrupted scans, skip failed sessions, report progress clearly
+- [ ] **Hook output clarity** — User-visible hook messages should confirm what happened ("Analyzed session, found 2 new reasoning gaps")
+- [ ] **First-run experience** — After `taste init`, guide user to `taste show` and explain what happens next (automatic via SessionEnd)
+
+### P2 — Polish
+
+- [ ] **Better A-to-C inference** — Improve extraction of missing reasoning steps vs surface preferences
+- [ ] **Evidence decay** — Reduce weight of old evidence, strengthen recent patterns
+- [ ] **Framework quality metrics** — Measure whether injected checkpoints actually prevent repeat mistakes
 
 ---
-
-## Next: Sharpen
-
-- **Better A-to-C inference** — Improve extraction of missing reasoning steps vs surface preferences
-- **Evidence decay** — Reduce weight of old evidence, strengthen recent patterns
-- **Framework quality metrics** — Measure whether injected checkpoints actually prevent repeat mistakes
 
 ## Later: Expand
 
 - **Cross-platform support** — Cursor, Codex, Copilot adapters
 - **Team reasoning profiles** — Composite frameworks from team correction patterns
-- **npm publish** — Official package release
 
 ---
 
