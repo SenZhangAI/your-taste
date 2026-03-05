@@ -95,7 +95,8 @@ async function main() {
 
   debug(`user-prompt: injecting ${additionalContext.length} chars of context`);
   console.log(JSON.stringify({
-    hookSpecificOutput: { additionalContext },
+    result: 'your-taste: context injected',
+    hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext },
   }));
 }
 

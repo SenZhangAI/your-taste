@@ -68,7 +68,7 @@ async function main() {
 
   const output = { result: resultMsg };
   if (additionalContext) {
-    output.hookSpecificOutput = { additionalContext };
+    output.hookSpecificOutput = { hookEventName: 'SessionStart', additionalContext };
   }
 
   debug(`session-start: injecting context (${additionalContext?.length || 0} chars), result="${output.result}"`);
