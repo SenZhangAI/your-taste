@@ -1,192 +1,79 @@
 import { describe, it, expect } from 'vitest';
-import { parseAnalysisResponse, parseExtractResponse, parseSynthesisResponse } from '../src/analyzer.js';
-
-describe('analyzer response parsing', () => {
-  it('parses signals and candidate_rules from response', () => {
-    const json = JSON.stringify({
-      signals: [
-        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'test', summary: 'test' }
-      ],
-      candidate_rules: [
-        { text: 'Clean breaks over gradual migration', evidence: 'Chose rewrite over incremental refactoring' }
-      ],
-      session_quality: 'high',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.signals).toHaveLength(1);
-    expect(result.rules).toEqual([
-      { text: 'Clean breaks over gradual migration', evidence: 'Chose rewrite over incremental refactoring' }
-    ]);
-  });
-
-  it('returns empty rules when candidate_rules is missing', () => {
-    const json = JSON.stringify({
-      signals: [
-        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'test', summary: 'test' }
-      ],
-      session_quality: 'medium',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.signals).toHaveLength(1);
-    expect(result.rules).toEqual([]);
-  });
-
-  it('returns empty signals and rules for session_quality none', () => {
-    const json = JSON.stringify({ signals: [], candidate_rules: [], session_quality: 'none' });
-    const result = parseAnalysisResponse(json);
-    expect(result.signals).toEqual([]);
-    expect(result.rules).toEqual([]);
-    expect(result.context).toBeNull();
-  });
-
-  it('handles malformed JSON gracefully', () => {
-    const result = parseAnalysisResponse('not json at all');
-    expect(result.signals).toEqual([]);
-    expect(result.rules).toEqual([]);
-  });
-
-  it('filters invalid signals', () => {
-    const json = JSON.stringify({
-      signals: [
-        { dimension: 'risk_tolerance', score: 0.8, direction: 'bold', evidence: 'test', summary: 'test' },
-        { dimension: 'nonexistent', score: 0.5, direction: 'x', evidence: 'x', summary: 'x' },
-        { dimension: 'risk_tolerance', evidence: 'no score' },
-      ],
-      candidate_rules: [],
-      session_quality: 'medium',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.signals).toHaveLength(1);
-  });
-
-  it('parses legacy string rules for backward compatibility', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: ['Valid rule', 'Another valid'],
-      session_quality: 'medium',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.rules).toEqual([
-      { text: 'Valid rule', evidence: null },
-      { text: 'Another valid', evidence: null },
-    ]);
-  });
-
-  it('filters invalid rules', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [
-        { text: 'Valid', evidence: 'some evidence' },
-        123,
-        null,
-        { text: '', evidence: 'empty text' },
-        { noText: true },
-        'Legacy string',
-      ],
-      session_quality: 'medium',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.rules).toHaveLength(2);
-    expect(result.rules[0]).toEqual({ text: 'Valid', evidence: 'some evidence' });
-    expect(result.rules[1]).toEqual({ text: 'Legacy string', evidence: null });
-  });
-
-  it('parses session_context when present', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'medium',
-      session_context: {
-        topics: ['product repositioning'],
-        decisions: ['use YAML storage'],
-        open_questions: ['size limits'],
-      },
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.context).toEqual({
-      topics: ['product repositioning'],
-      decisions: ['use YAML storage'],
-      open_questions: ['size limits'],
-    });
-  });
-
-  it('returns null context when session_context is missing', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'medium',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.context).toBeNull();
-  });
-
-  it('preserves context even when session_quality is none', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'none',
-      session_context: {
-        topics: ['debugging API integration'],
-        decisions: ['use retry with exponential backoff'],
-        open_questions: [],
-      },
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.signals).toEqual([]);
-    expect(result.rules).toEqual([]);
-    expect(result.context).toEqual({
-      topics: ['debugging API integration'],
-      decisions: ['use retry with exponential backoff'],
-      open_questions: [],
-    });
-  });
-
-  it('validates context structure — filters non-string array items', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'medium',
-      session_context: {
-        topics: ['valid topic', 123, null, ''],
-        decisions: ['valid decision', false],
-        open_questions: ['valid question'],
-      },
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.context.topics).toEqual(['valid topic']);
-    expect(result.context.decisions).toEqual(['valid decision']);
-    expect(result.context.open_questions).toEqual(['valid question']);
-  });
-
-  it('returns null context when session_context has no valid entries', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'medium',
-      session_context: {
-        topics: [],
-        decisions: [],
-        open_questions: [],
-      },
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.context).toBeNull();
-  });
-
-  it('handles non-object session_context gracefully', () => {
-    const json = JSON.stringify({
-      signals: [],
-      candidate_rules: [],
-      session_quality: 'medium',
-      session_context: 'not an object',
-    });
-    const result = parseAnalysisResponse(json);
-    expect(result.context).toBeNull();
-  });
-});
+import { parseExtractResponse, parseSynthesisResponse } from '../src/analyzer.js';
 
 describe('Pass 1: parseExtractResponse', () => {
-  it('parses decision points with all fields', () => {
+  it('parses reasoning gaps with all fields', () => {
+    const json = JSON.stringify({
+      reasoning_gaps: [
+        {
+          what_ai_did: 'Accepted user hypothesis without verifying in code',
+          what_broke: 'Hypothesis was wrong, led to incorrect implementation',
+          missing_step: 'Read the actual code path before implementing',
+          checkpoint: 'Verify data relationships in code before acting on assumptions',
+          strength: 'correction',
+          category: 'verification_skip',
+        },
+      ],
+      session_context: { topics: ['risk scoring redesign'], decisions: [], open_questions: [] },
+      session_quality: 'high',
+      user_language: 'zh',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.reasoningGaps).toHaveLength(1);
+    expect(result.reasoningGaps[0].what_ai_did).toBe('Accepted user hypothesis without verifying in code');
+    expect(result.reasoningGaps[0].what_broke).toBe('Hypothesis was wrong, led to incorrect implementation');
+    expect(result.reasoningGaps[0].missing_step).toBe('Read the actual code path before implementing');
+    expect(result.reasoningGaps[0].checkpoint).toBe('Verify data relationships in code before acting on assumptions');
+    expect(result.reasoningGaps[0].strength).toBe('correction');
+    expect(result.reasoningGaps[0].category).toBe('verification_skip');
+    expect(result.context.topics).toEqual(['risk scoring redesign']);
+    expect(result.userLanguage).toBe('zh');
+  });
+
+  it('returns empty for malformed JSON', () => {
+    const result = parseExtractResponse('not json');
+    expect(result.reasoningGaps).toEqual([]);
+    expect(result.context).toBeNull();
+    expect(result.userLanguage).toBeNull();
+  });
+
+  it('filters gaps missing required fields', () => {
+    const json = JSON.stringify({
+      reasoning_gaps: [
+        { what_ai_did: 'good', what_broke: 'good', checkpoint: 'valid', strength: 'correction', category: 'breadth_miss' },
+        { what_ai_did: 'missing what_broke', checkpoint: 'valid', strength: 'correction', category: 'breadth_miss' },
+        { what_ai_did: 'empty checkpoint', what_broke: 'broke', checkpoint: '', strength: 'correction', category: 'breadth_miss' },
+        null,
+        123,
+      ],
+      session_quality: 'medium',
+    });
+    const result = parseExtractResponse(json);
+    expect(result.reasoningGaps).toHaveLength(1);
+    expect(result.reasoningGaps[0].what_ai_did).toBe('good');
+  });
+
+  it('defaults invalid strength to correction', () => {
+    const json = JSON.stringify({
+      reasoning_gaps: [
+        { what_ai_did: 'a', what_broke: 'b', checkpoint: 'c', strength: 'unknown_type', category: 'depth_skip' },
+      ],
+    });
+    const result = parseExtractResponse(json);
+    expect(result.reasoningGaps[0].strength).toBe('correction');
+  });
+
+  it('defaults invalid category to verification_skip', () => {
+    const json = JSON.stringify({
+      reasoning_gaps: [
+        { what_ai_did: 'a', what_broke: 'b', checkpoint: 'c', strength: 'correction', category: 'nonexistent' },
+      ],
+    });
+    const result = parseExtractResponse(json);
+    expect(result.reasoningGaps[0].category).toBe('verification_skip');
+  });
+
+  it('backward compat: parses legacy decision_points into reasoningGaps format', () => {
     const json = JSON.stringify({
       decision_points: [
         {
@@ -199,88 +86,16 @@ describe('Pass 1: parseExtractResponse', () => {
       ],
       session_context: { topics: ['auth redesign'], decisions: [], open_questions: [] },
       session_quality: 'high',
+      user_language: 'en',
     });
     const result = parseExtractResponse(json);
-    expect(result.decisionPoints).toHaveLength(1);
-    expect(result.decisionPoints[0].strength).toBe('correction');
-    expect(result.decisionPoints[0].dimension).toBe('communication_style');
+    expect(result.reasoningGaps).toHaveLength(1);
+    expect(result.reasoningGaps[0].what_ai_did).toBe('Listed 3 options');
+    expect(result.reasoningGaps[0].what_broke).toBe('Just pick one');
+    expect(result.reasoningGaps[0].checkpoint).toBe('Recommend one approach, not menus');
+    expect(result.reasoningGaps[0].category).toBe('verification_skip');
     expect(result.context.topics).toEqual(['auth redesign']);
-  });
-
-  it('returns empty for malformed JSON', () => {
-    const result = parseExtractResponse('not json');
-    expect(result.decisionPoints).toEqual([]);
-    expect(result.context).toBeNull();
-  });
-
-  it('filters decision points missing required fields', () => {
-    const json = JSON.stringify({
-      decision_points: [
-        { ai_proposed: 'good', user_reacted: 'good', strength: 'correction', dimension: 'risk_tolerance', principle: 'valid' },
-        { ai_proposed: 'missing principle', user_reacted: 'test', strength: 'correction', dimension: 'risk_tolerance' },
-        { ai_proposed: 'empty principle', user_reacted: 'test', strength: 'correction', dimension: 'risk_tolerance', principle: '' },
-        null,
-        123,
-      ],
-      session_quality: 'medium',
-    });
-    const result = parseExtractResponse(json);
-    expect(result.decisionPoints).toHaveLength(1);
-  });
-
-  it('defaults invalid strength to correction', () => {
-    const json = JSON.stringify({
-      decision_points: [
-        { ai_proposed: 'a', user_reacted: 'b', strength: 'unknown_type', dimension: 'risk_tolerance', principle: 'test' },
-      ],
-    });
-    const result = parseExtractResponse(json);
-    expect(result.decisionPoints[0].strength).toBe('correction');
-  });
-
-  it('nulls invalid dimension', () => {
-    const json = JSON.stringify({
-      decision_points: [
-        { ai_proposed: 'a', user_reacted: 'b', strength: 'correction', dimension: 'nonexistent', principle: 'test' },
-      ],
-    });
-    const result = parseExtractResponse(json);
-    expect(result.decisionPoints[0].dimension).toBeNull();
-  });
-
-  it('preserves optional conditions field', () => {
-    const json = JSON.stringify({
-      decision_points: [
-        {
-          ai_proposed: 'Proposed full schema replacement',
-          user_reacted: 'Depends on context — new project yes, production no',
-          strength: 'correction',
-          dimension: 'risk_tolerance',
-          principle: 'Minimize total migration risk',
-          conditions: 'New project → clean break; production system → gradual migration',
-        },
-      ],
-      session_quality: 'high',
-    });
-    const result = parseExtractResponse(json);
-    expect(result.decisionPoints[0].conditions).toBe('New project → clean break; production system → gradual migration');
-  });
-
-  it('defaults conditions to null when absent', () => {
-    const json = JSON.stringify({
-      decision_points: [
-        {
-          ai_proposed: 'Listed 3 options',
-          user_reacted: 'Just pick one',
-          strength: 'correction',
-          dimension: 'communication_style',
-          principle: 'Recommend one approach',
-        },
-      ],
-      session_quality: 'high',
-    });
-    const result = parseExtractResponse(json);
-    expect(result.decisionPoints[0].conditions).toBeNull();
+    expect(result.userLanguage).toBe('en');
   });
 });
 

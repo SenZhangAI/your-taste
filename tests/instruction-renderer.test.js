@@ -2,7 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { renderFromObservations } from '../src/instruction-renderer.js';
 
 describe('renderFromObservations', () => {
-  it('renders working principles and common misreads, excludes thinking patterns', () => {
+  it('renders new framework sections: domain reasoning and failure patterns', () => {
+    const md = `## Reasoning Checkpoints\n\n- **Verify FK**: check join keys\n\n## Domain Reasoning\n\n- **DB joins** (3 sessions)\n\n## Failure Patterns\n\n- **AI pattern**: accepts hypothesis as fact`;
+
+    const result = renderFromObservations(md);
+    expect(result).not.toContain('Verify FK'); // checkpoints excluded
+    expect(result).toContain('DB joins');
+    expect(result).toContain('accepts hypothesis as fact');
+  });
+
+  it('renders legacy sections: behavioral patterns and common misreads, excludes thinking patterns', () => {
     const md = `## Thinking Patterns
 
 - **Execution simulation**: validates by running code mentally. (6 sessions, high confidence)
@@ -23,23 +32,23 @@ describe('renderFromObservations', () => {
     expect(result).not.toContain('Act independently');
   });
 
-  it('works with Chinese headers', () => {
+  it('works with legacy Chinese headers', () => {
     const md = `## 思维模式
 
-- **执行模拟**: 通过心理运行代码验证。(6 sessions)
+- **Exec simulation**: validates by running code mentally. (6 sessions)
 
 ## 行为模式
 
-- **迁移策略** (5 sessions)
+- **Migration strategy** (5 sessions)
 
 ## 建议规则
 
-- "独立执行"`;
+- "Act independently"`;
 
     const result = renderFromObservations(md);
-    expect(result).not.toContain('执行模拟');
-    expect(result).toContain('迁移策略');
-    expect(result).not.toContain('独立执行');
+    expect(result).not.toContain('Exec simulation');
+    expect(result).toContain('Migration strategy');
+    expect(result).not.toContain('Act independently');
   });
 
   it('returns null when observations is null', () => {
@@ -61,5 +70,14 @@ describe('renderFromObservations', () => {
     const md = '## Common Misreads\n\n- Misread one';
     const result = renderFromObservations(md);
     expect(result).toContain('Misread one');
+  });
+
+  it('renders new-style Chinese headers', () => {
+    const md = `## 推理检查点\n\n- **Verify FK**: check join keys\n\n## 领域推理\n\n- **DB joins** (3 sessions)\n\n## 失败模式\n\n- **AI pattern**: accepts hypothesis as fact`;
+
+    const result = renderFromObservations(md);
+    expect(result).not.toContain('Verify FK'); // checkpoints excluded
+    expect(result).toContain('DB joins');
+    expect(result).toContain('accepts hypothesis as fact');
   });
 });

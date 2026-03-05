@@ -65,16 +65,22 @@ export function extractSuggestedRules(markdown) {
 }
 
 /**
- * Extract the Thinking Patterns section for UserPromptSubmit injection.
+ * Extract reasoning checkpoints for UserPromptSubmit injection.
+ * Tries new headers first, falls back to legacy Thinking Patterns.
  */
-export function extractThinkingPatterns(markdown) {
+export function extractReasoningCheckpoints(markdown) {
   if (!markdown) return null;
-  const headers = ['Thinking Patterns', '思维模式'];
+  const headers = ['Reasoning Checkpoints', '推理检查点', 'Thinking Patterns', '思维模式'];
   for (const h of headers) {
     const section = extractSection(markdown, h);
     if (section) return section;
   }
   return null;
+}
+
+/** @deprecated Use extractReasoningCheckpoints instead */
+export function extractThinkingPatterns(markdown) {
+  return extractReasoningCheckpoints(markdown);
 }
 
 /**

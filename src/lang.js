@@ -76,12 +76,16 @@ const TEMPLATES = {
     contextDecisions: '## Recent Decisions',
     contextQuestions: '## Open Questions',
     contextLastSession: '## Last Session',
-    // observations.js
+    // observations.js (legacy, kept for backward compat reading)
     thinkingPatternsHeader: 'Thinking Patterns',
     behavioralPatternsHeader: 'Behavioral Patterns',
     workingPrinciplesHeader: 'Working Principles',
     suggestedRulesHeader: 'Suggested Rules',
     commonMisreadsHeader: 'Common Misreads',
+    // observations.js (v1.0 thinking framework)
+    reasoningCheckpointsHeader: 'Reasoning Checkpoints',
+    domainReasoningHeader: 'Domain Reasoning',
+    failurePatternsHeader: 'Failure Patterns',
   },
   zh: {
     globalContextHeader: '# 跨项目关注方向',
@@ -95,6 +99,9 @@ const TEMPLATES = {
     workingPrinciplesHeader: '工作原则',
     suggestedRulesHeader: '建议规则',
     commonMisreadsHeader: '常见误读',
+    reasoningCheckpointsHeader: '推理检查点',
+    domainReasoningHeader: '领域推理',
+    failurePatternsHeader: '失败模式',
   },
   ja: {
     globalContextHeader: '# クロスプロジェクト フォーカス',
@@ -108,6 +115,9 @@ const TEMPLATES = {
     workingPrinciplesHeader: 'Working Principles',
     suggestedRulesHeader: 'Suggested Rules',
     commonMisreadsHeader: 'Common Misreads',
+    reasoningCheckpointsHeader: 'Reasoning Checkpoints',
+    domainReasoningHeader: 'Domain Reasoning',
+    failurePatternsHeader: 'Failure Patterns',
   },
 };
 
