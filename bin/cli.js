@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { backfill } from '../src/backfill.js';
+import { backfill, discoverForScan } from '../src/backfill.js';
 import { readObservations, writeObservations } from '../src/observations.js';
 import { readProposals, removeProposals } from '../src/proposals.js';
 import { readManagedRules, appendManagedRules } from '../src/claudemd.js';
@@ -47,6 +47,7 @@ if (command === 'insights') {
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
   console.log('    --concurrency <N> Process N sessions in parallel (default: 1)');
+  console.log('    --discover      Output scan preview as JSON (session count, time range) and exit');
   console.log('  show              Display your taste profile');
   console.log('  synthesize        Re-run Stage 2 synthesis from existing signals');
   console.log('    --dry-run       Output to stdout instead of writing observations.md');
@@ -66,6 +67,7 @@ function parseInsightsFlags() {
   const args = process.argv.slice(3);
   const filter = {};
   let concurrency = 1;
+  let discover = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--all') {
@@ -76,14 +78,31 @@ function parseInsightsFlags() {
       filter.maxSessions = parseInt(args[++i], 10);
     } else if (args[i] === '--concurrency' && args[i + 1]) {
       concurrency = Math.max(1, parseInt(args[++i], 10));
+    } else if (args[i] === '--discover') {
+      discover = true;
     }
   }
 
-  return { filter, concurrency };
+  return { filter, concurrency, discover };
 }
 
 async function runInsights() {
-  const { filter, concurrency } = parseInsightsFlags();
+  const { filter, concurrency, discover } = parseInsightsFlags();
+
+  // --discover: fast preview of what would be scanned, then exit
+  if (discover) {
+    const result = await discoverForScan(PROJECTS_DIR, { filter, currentProjectPath: process.cwd() });
+    const formatDate = d => d ? d.toLocaleDateString('en-CA') : null;
+    console.log(JSON.stringify({
+      toProcess: result.toProcess.length,
+      skipped: result.skipCount,
+      needPass1: result.needPass1.length,
+      resumed: result.pass1Resumed,
+      oldest: formatDate(result.oldest),
+      newest: formatDate(result.newest),
+    }));
+    return;
+  }
 
   if (filter.all) {
     console.log('Scanning ALL past sessions (--all)...\n');

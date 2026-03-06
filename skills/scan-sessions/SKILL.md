@@ -10,19 +10,28 @@ Scan past Claude Code sessions to build a preference profile.
 
 **Important:** Always respond in the user's language (infer from their recent messages in this conversation).
 
-1. Determine scan scope from the user's message:
-   - Default (no qualifier): `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --concurrency 2`
-     Scans the 50 most recent sessions with 2 parallel workers.
-   - `--deep` or "all sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --all --concurrency 2`
-   - "last N days/weeks/months": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --days <N> --concurrency 2`
-     Convert weeks/months to days (1 week = 7, 1 month = 30, 3 months = 90).
-   - "N sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --max <N> --concurrency 2`
+1. Determine scan scope flags from the user's message:
+   - Default (no qualifier): no extra flags (scans 50 most recent sessions)
+   - `--deep` or "all sessions": `--all`
+   - "last N days/weeks/months": `--days <N>` (convert weeks/months to days: 1 week = 7, 1 month = 30, 3 months = 90)
+   - "N sessions": `--max <N>`
    - If the user specifies a concurrency number, use that instead of the default 2.
 
-2. Tell the user what scope you're scanning and that it runs in background so they can keep working.
-   **Time expectation:** Scanning is slow — each session requires an LLM call. 50 sessions typically takes 15-30 minutes, full scans can take over an hour. Tell the user a realistic time range so they don't expect it in "a few minutes".
+2. Run a **synchronous discover** call first to get session metadata:
+   `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --discover [scope flags from step 1]`
 
-3. Run the command **in the background** (use run_in_background).
+   This outputs JSON: `{"toProcess": N, "skipped": N, "needPass1": N, "resumed": N, "oldest": "YYYY-MM-DD", "newest": "YYYY-MM-DD"}`
+
+   Parse the JSON and tell the user:
+   - How many sessions will be scanned and the time range (oldest ~ newest)
+   - How many were already processed (skipped)
+   - That the scan runs in background so they can keep working
+   - **Time expectation:** Each session requires an LLM call. Estimate ~20 seconds per `needPass1` session (e.g., 50 sessions ≈ 15-20 min, 200+ sessions ≈ over an hour).
+
+   If `toProcess` is 0, tell the user all sessions have already been processed and stop here.
+
+3. Run the full scan command **in the background** (use run_in_background):
+   `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --concurrency 2 [scope flags from step 1]`
 
 4. When the background task completes and you are notified, present the results with an encouraging tone:
    - **Lead with what was learned**, not what's missing. Frame each discovered dimension as a concrete insight about the user's working style (e.g., "You prefer high autonomy — act first, confirm later" rather than just showing a number).
