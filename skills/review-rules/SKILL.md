@@ -22,7 +22,7 @@ node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" review-data
 3. For each proposal, present it to the user with:
    - The rule text
    - The evidence
-   - The source (session file or taste:init)
+   - The source (session file or taste:insights)
    Ask: "Accept, Edit, or Dismiss?"
 
 4. Collect all decisions into this JSON format:

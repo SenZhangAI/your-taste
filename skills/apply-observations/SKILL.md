@@ -12,7 +12,7 @@ Apply learned observations from your-taste to CLAUDE.md files.
 
 1. Read the observations file:
    - Read `~/.your-taste/observations.md`
-   - If the file doesn't exist or is empty, tell the user: "No observations yet — run taste:init first to scan your sessions." Then stop.
+   - If the file doesn't exist or is empty, tell the user: "No observations yet — run taste:insights first to scan your sessions." Then stop.
 
 2. Read existing CLAUDE.md files:
    - Read `~/.claude/CLAUDE.md` (global — should always exist)

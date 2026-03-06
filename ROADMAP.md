@@ -16,7 +16,7 @@ See [MILESTONE.md](MILESTONE.md) for completed milestones and known issues.
 
 - [ ] **Init resilience** — Resume interrupted scans, skip failed sessions, report progress clearly
 - [ ] **Hook output clarity** — User-visible hook messages should confirm what happened ("Analyzed session, found 2 new reasoning gaps")
-- [ ] **First-run experience** — After `taste init`, guide user to `taste show` and explain what happens next (automatic via SessionEnd)
+- [ ] **First-run experience** — After `taste insights`, guide user to `taste show` and explain what happens next (automatic via SessionEnd)
 
 ### P2 — Polish
 

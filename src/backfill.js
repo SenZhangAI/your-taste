@@ -33,7 +33,7 @@ function sleep(ms) {
 // Viable sessions are typically 14KB+; junk (too few messages, too short) median 5-7KB.
 const MIN_FILE_SIZE = 10_000;
 
-// Signatures to detect meta-sessions (taste init's own claude -p calls, skill invocations,
+// Signatures to detect meta-sessions (taste insights' own claude -p calls, skill invocations,
 // and automated agent sessions that don't contain real user decision-making).
 // Checked against the first 2KB of each file — cheap O(1) read, no full parse needed.
 const META_SESSION_MARKERS = [
@@ -55,7 +55,7 @@ function toClaudeProjectDirName(fsPath) {
 }
 
 /**
- * Check if a session file is a meta-session (from taste init's own claude -p calls
+ * Check if a session file is a meta-session (from taste insights' own claude -p calls
  * or skill invocations). Scans the first few user/assistant messages for markers.
  *
  * JSONL files start with metadata lines (progress, hook events), so raw byte reads
@@ -440,8 +440,8 @@ export async function backfill(projectsDir, options = {}) {
     for (const rule of suggestedRules) {
       await appendProposal({
         rule,
-        evidence: 'Synthesized from multiple sessions via taste:init',
-        source: 'taste:init',
+        evidence: 'Synthesized from multiple sessions via taste:insights',
+        source: 'taste:insights',
         scope: 'global',
       });
     }

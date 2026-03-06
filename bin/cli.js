@@ -23,8 +23,8 @@ if (process.argv.includes('--debug')) {
 
 const command = process.argv[2];
 
-if (command === 'init') {
-  await runInit();
+if (command === 'insights' || command === 'init') {
+  await runInsights();
 } else if (command === 'show') {
   await runShow();
 } else if (command === 'review-data') {
@@ -42,7 +42,7 @@ if (command === 'init') {
 } else {
   console.log('Usage: taste <command> [options]\n');
   console.log('Commands:');
-  console.log('  init              Scan past sessions and build your taste profile');
+  console.log('  insights          Scan past sessions and extract reasoning insights');
   console.log('    --all           Scan all sessions (slow, higher cost)');
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
@@ -62,7 +62,7 @@ if (command === 'init') {
   process.exit(1);
 }
 
-function parseInitFlags() {
+function parseInsightsFlags() {
   const args = process.argv.slice(3);
   const filter = {};
   let concurrency = 1;
@@ -82,8 +82,8 @@ function parseInitFlags() {
   return { filter, concurrency };
 }
 
-async function runInit() {
-  const { filter, concurrency } = parseInitFlags();
+async function runInsights() {
+  const { filter, concurrency } = parseInsightsFlags();
 
   if (filter.all) {
     console.log('Scanning ALL past sessions (--all)...\n');
@@ -188,7 +188,7 @@ async function runShow() {
   }
 
   if (!observations && rules.length === 0) {
-    console.log('No data yet. Run `taste init` to scan past sessions.');
+    console.log('No data yet. Run `taste insights` to scan past sessions.');
   }
 }
 
@@ -338,7 +338,7 @@ async function runSynthesize() {
         signalsPath = bakPath;
         console.log(`Using backup signals: ${bakPath}`);
       } catch {
-        console.error('No signals file found. Run `taste init` first, or specify --signals <path>.');
+        console.error('No signals file found. Run `taste insights` first, or specify --signals <path>.');
         process.exit(1);
       }
     }

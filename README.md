@@ -45,10 +45,10 @@ claude plugin install your-taste
 ### 1. Build your thinking framework from past sessions
 
 ```bash
-taste init
+taste insights
 ```
 
-Scans your Claude Code history, extracts reasoning gaps, and synthesizes your initial framework. Takes seconds.
+Scans your Claude Code history, extracts reasoning gaps, and synthesizes your thinking framework.
 
 ### 2. See what was learned
 
@@ -64,13 +64,13 @@ taste review
 
 Strong patterns get proposed as behavioral rules. Review and accept/reject them — accepted rules are written to `~/.claude/CLAUDE.md` where Claude Code reads them natively.
 
-After init, the framework evolves automatically via the SessionEnd hook. No maintenance needed.
+After the initial scan, the framework evolves automatically via the SessionEnd hook. No maintenance needed.
 
 ## Commands
 
 | Command | What it does |
 |---------|-------------|
-| `taste init` | Build framework from conversation history |
+| `taste insights` | Scan sessions and extract reasoning insights |
 | `taste show` | Display current thinking framework |
 | `taste review` | Accept/reject proposed rules |
 | `taste status` | Show configuration and framework stats |
@@ -144,7 +144,7 @@ Three-layer injection:
 
 Two learning channels:
 
-1. **`taste init`** (batch) — Stage 1 extracts reasoning gaps → Stage 2 synthesizes framework
+1. **`taste insights`** (batch) — Stage 1 extracts reasoning gaps → Stage 2 synthesizes framework
 2. **SessionEnd hook** (incremental) — Analyzes each session, proposes new rules
 
 ## License

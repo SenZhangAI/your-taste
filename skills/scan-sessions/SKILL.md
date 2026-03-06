@@ -1,6 +1,6 @@
 ---
 name: scan-sessions
-description: Scan past Claude Code sessions and build your taste profile instantly
+description: Scan past Claude Code sessions and extract reasoning insights
 allowed-tools: Bash(node *)
 ---
 
@@ -11,12 +11,12 @@ Scan past Claude Code sessions to build a preference profile.
 **Important:** Always respond in the user's language (infer from their recent messages in this conversation).
 
 1. Determine scan scope from the user's message:
-   - Default (no qualifier): `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" init --concurrency 2`
+   - Default (no qualifier): `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --concurrency 2`
      Scans the 50 most recent sessions with 2 parallel workers.
-   - `--deep` or "all sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" init --all --concurrency 2`
-   - "last N days/weeks/months": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" init --days <N> --concurrency 2`
+   - `--deep` or "all sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --all --concurrency 2`
+   - "last N days/weeks/months": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --days <N> --concurrency 2`
      Convert weeks/months to days (1 week = 7, 1 month = 30, 3 months = 90).
-   - "N sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" init --max <N> --concurrency 2`
+   - "N sessions": `node "${CLAUDE_PLUGIN_ROOT}/bin/cli.js" insights --max <N> --concurrency 2`
    - If the user specifies a concurrency number, use that instead of the default 2.
 
 2. Tell the user what scope you're scanning and that it runs in background so they can keep working.
