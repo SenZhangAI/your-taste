@@ -61,6 +61,12 @@ async function main() {
 
 main().catch((e) => {
   debug(`session-end: fatal error — ${e.message}\n${e.stack}`);
+  const isInfra = /timeout|ECONNREFUSED|ECONNRESET|API error [5]\d{2}/i.test(e.message);
+  if (isInfra) {
+    // 基础设施故障（LLM 不可达、超时）— 静默降级
+    process.exit(0);
+  }
+  // 代码 bug — 暴露给开发者
   console.log(JSON.stringify({ result: `your-taste: session-end error — ${e.message}` }));
-  process.exit(0);
+  process.exit(2);
 });

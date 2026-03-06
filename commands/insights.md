@@ -1,5 +1,5 @@
 ---
-description: Scan past Claude Code sessions and build your taste profile instantly
+description: Scan past Claude Code sessions and extract reasoning insights
 disable-model-invocation: true
 ---
 

@@ -102,6 +102,10 @@ async function main() {
 
 main().catch((e) => {
   debug(`user-prompt: fatal error — ${e.message}\n${e.stack}`);
+  const isInfra = /timeout|ECONNREFUSED|ECONNRESET|API error [5]\d{2}/i.test(e.message);
+  if (isInfra) {
+    process.exit(0);
+  }
   console.log(JSON.stringify({ result: `your-taste: prompt error — ${e.message}` }));
-  process.exit(0);
+  process.exit(2);
 });

@@ -21,7 +21,7 @@ Your-taste captures **AI reasoning failures** from collaboration and evolves a t
 ## Architecture: Reasoning Gap Learning
 
 ### Data Flow
-1. **taste init** (batch) — two-pass pipeline: extract reasoning gaps → synthesize thinking framework
+1. **taste insights** (batch) — two-pass pipeline: extract reasoning gaps → synthesize thinking framework
 2. **SessionEnd** (incremental) — extract reasoning gaps → accumulate signals
 3. **Synthesis trigger** — after N new sessions, re-synthesize the evolved thinking framework
 

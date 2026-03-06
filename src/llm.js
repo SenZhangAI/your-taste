@@ -313,6 +313,7 @@ export async function complete(prompt, { timeoutMs = DEFAULT_TIMEOUT_MS, systemP
       if (err.name === 'AbortError') {
         throw new Error(`${provider.name} timed out after ${timeoutMs / 1000}s`);
       }
+      err.message = `[${provider.name}] ${err.message}`;
       throw err;
     } finally {
       clearTimeout(timer);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { backfill } from '../src/backfill.js';
+import { backfill, discoverForScan } from '../src/backfill.js';
 import { readObservations, writeObservations } from '../src/observations.js';
 import { readProposals, removeProposals } from '../src/proposals.js';
 import { readManagedRules, appendManagedRules } from '../src/claudemd.js';
@@ -23,8 +23,8 @@ if (process.argv.includes('--debug')) {
 
 const command = process.argv[2];
 
-if (command === 'init') {
-  await runInit();
+if (command === 'insights') {
+  await runInsights();
 } else if (command === 'show') {
   await runShow();
 } else if (command === 'review-data') {
@@ -42,10 +42,12 @@ if (command === 'init') {
 } else {
   console.log('Usage: taste <command> [options]\n');
   console.log('Commands:');
-  console.log('  init              Scan past sessions and build your taste profile');
+  console.log('  insights          Scan past sessions and extract reasoning insights');
   console.log('    --all           Scan all sessions (slow, higher cost)');
   console.log('    --days <N>      Scan sessions from last N days');
   console.log('    --max <N>       Scan at most N sessions (default: 50)');
+  console.log('    --concurrency <N> Process N sessions in parallel (default: 1)');
+  console.log('    --discover      Output scan preview as JSON (session count, time range) and exit');
   console.log('  show              Display your taste profile');
   console.log('  synthesize        Re-run Stage 2 synthesis from existing signals');
   console.log('    --dry-run       Output to stdout instead of writing observations.md');
@@ -61,9 +63,11 @@ if (command === 'init') {
   process.exit(1);
 }
 
-function parseInitFlags() {
+function parseInsightsFlags() {
   const args = process.argv.slice(3);
   const filter = {};
+  let concurrency = 1;
+  let discover = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--all') {
@@ -72,14 +76,33 @@ function parseInitFlags() {
       filter.days = parseInt(args[++i], 10);
     } else if (args[i] === '--max' && args[i + 1]) {
       filter.maxSessions = parseInt(args[++i], 10);
+    } else if (args[i] === '--concurrency' && args[i + 1]) {
+      concurrency = Math.max(1, parseInt(args[++i], 10));
+    } else if (args[i] === '--discover') {
+      discover = true;
     }
   }
 
-  return filter;
+  return { filter, concurrency, discover };
 }
 
-async function runInit() {
-  const filter = parseInitFlags();
+async function runInsights() {
+  const { filter, concurrency, discover } = parseInsightsFlags();
+
+  // --discover: fast preview of what would be scanned, then exit
+  if (discover) {
+    const result = await discoverForScan(PROJECTS_DIR, { filter, currentProjectPath: process.cwd() });
+    const formatDate = d => d ? d.toLocaleDateString('en-CA') : null;
+    console.log(JSON.stringify({
+      toProcess: result.toProcess.length,
+      skipped: result.skipCount,
+      needPass1: result.needPass1.length,
+      resumed: result.pass1Resumed,
+      oldest: formatDate(result.oldest),
+      newest: formatDate(result.newest),
+    }));
+    return;
+  }
 
   if (filter.all) {
     console.log('Scanning ALL past sessions (--all)...\n');
@@ -93,11 +116,25 @@ async function runInit() {
   let lastLog = 0;
   let aborted = false;
 
+  function formatDate(d) {
+    return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  }
+
   let result;
   try {
     result = await backfill(PROJECTS_DIR, {
       filter,
+      concurrency,
       currentProjectPath: process.cwd(),
+      onPreview({ toProcess, skipped, needPass1, resumed, oldest, newest }) {
+        const range = formatDate(oldest) === formatDate(newest)
+          ? formatDate(oldest)
+          : `${formatDate(oldest)} ~ ${formatDate(newest)}`;
+        console.log(`Found ${toProcess} session${toProcess > 1 ? 's' : ''} to process (${range})`);
+        if (skipped > 0) console.log(`Skipping ${skipped} already processed`);
+        if (resumed > 0) console.log(`Resuming: ${resumed} sessions have partial results from previous run`);
+        console.log('');
+      },
       onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
         if (a) { aborted = true; return; }
         if (phase === 'pass2') {
@@ -170,7 +207,7 @@ async function runShow() {
   }
 
   if (!observations && rules.length === 0) {
-    console.log('No data yet. Run `taste init` to scan past sessions.');
+    console.log('No data yet. Run `taste insights` to scan past sessions.');
   }
 }
 
@@ -320,7 +357,7 @@ async function runSynthesize() {
         signalsPath = bakPath;
         console.log(`Using backup signals: ${bakPath}`);
       } catch {
-        console.error('No signals file found. Run `taste init` first, or specify --signals <path>.');
+        console.error('No signals file found. Run `taste insights` first, or specify --signals <path>.');
         process.exit(1);
       }
     }
