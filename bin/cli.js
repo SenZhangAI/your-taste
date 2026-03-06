@@ -23,7 +23,7 @@ if (process.argv.includes('--debug')) {
 
 const command = process.argv[2];
 
-if (command === 'insights' || command === 'init') {
+if (command === 'insights') {
   await runInsights();
 } else if (command === 'show') {
   await runShow();
