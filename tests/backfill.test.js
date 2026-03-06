@@ -23,7 +23,8 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-b/session3.jsonl`, VALID_SESSION);
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(3);
-    expect(sessions.every(s => s.endsWith('.jsonl'))).toBe(true);
+    expect(sessions.every(s => s.path.endsWith('.jsonl'))).toBe(true);
+    expect(sessions.every(s => typeof s.mtime === 'number')).toBe(true);
   });
 
   it('ignores subagent transcripts', async () => {
@@ -32,7 +33,7 @@ describe('backfill session discovery', () => {
     await writeFile(`${TEST_PROJECTS}/project-a/session1/subagents/agent-abc.jsonl`, VALID_SESSION);
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toContain('session1.jsonl');
+    expect(sessions[0].path).toContain('session1.jsonl');
   });
 
   it('returns empty array for nonexistent directory', async () => {
@@ -72,7 +73,7 @@ describe('backfill session discovery', () => {
 
     const sessions = await discoverSessions(TEST_PROJECTS, { days: 30, noCap: true, minSize: 0 });
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toContain('fresh.jsonl');
+    expect(sessions[0].path).toContain('fresh.jsonl');
   });
 
   it('filters by days', async () => {
@@ -87,7 +88,7 @@ describe('backfill session discovery', () => {
 
     const sessions = await discoverSessions(TEST_PROJECTS, { days: 30, minSize: 0 });
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toContain('fresh.jsonl');
+    expect(sessions[0].path).toContain('fresh.jsonl');
   });
 
   it('sorts by most recent first', async () => {
@@ -102,8 +103,8 @@ describe('backfill session discovery', () => {
     await writeFile(newer, VALID_SESSION);
 
     const sessions = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
-    expect(sessions[0]).toContain('newer.jsonl');
-    expect(sessions[1]).toContain('older.jsonl');
+    expect(sessions[0].path).toContain('newer.jsonl');
+    expect(sessions[1].path).toContain('older.jsonl');
   });
 
   it('defaults to 50 max without explicit filter', async () => {
@@ -128,12 +129,12 @@ describe('backfill session discovery', () => {
 
     // Without priority: newer (project-b) comes first
     const noPriority = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 });
-    expect(noPriority[0]).toContain('project-b');
+    expect(noPriority[0].path).toContain('project-b');
 
     // With priority: project-a comes first despite being older
     const withPriority = await discoverSessions(TEST_PROJECTS, { all: true, minSize: 0 }, '/Users/me/project-a');
-    expect(withPriority[0]).toContain('project-a');
-    expect(withPriority[1]).toContain('project-b');
+    expect(withPriority[0].path).toContain('project-a');
+    expect(withPriority[1].path).toContain('project-b');
   });
 
   it('current project sessions fill max cap first', async () => {
@@ -148,7 +149,7 @@ describe('backfill session discovery', () => {
 
     // With max=4, all 3 current-project sessions should be included
     const sessions = await discoverSessions(TEST_PROJECTS, { maxSessions: 4, minSize: 0 }, '/Users/me/myproj');
-    const currentCount = sessions.filter(s => s.includes('-Users-me-myproj')).length;
+    const currentCount = sessions.filter(s => s.path.includes('-Users-me-myproj')).length;
     expect(currentCount).toBe(3);
     expect(sessions).toHaveLength(4);
   });

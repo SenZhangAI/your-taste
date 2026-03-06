@@ -181,7 +181,7 @@ export async function discoverSessions(projectsDir, filter = {}, currentProjectP
     debug(`discover: ${currentCount} sessions from current project prioritized`);
   }
 
-  return filtered.map(s => s.path);
+  return filtered.map(s => ({ path: s.path, mtime: s.mtime }));
 }
 
 /**
@@ -253,29 +253,46 @@ async function pass1Session(transcriptPath) {
  * Fail-fast: aborts Pass 1 after MAX_CONSECUTIVE_FAILURES consecutive LLM failures.
  */
 export async function backfill(projectsDir, options = {}) {
-  const { onProgress, filter, currentProjectPath, model: overrideModel } = options;
+  const { onProgress, onPreview, filter, currentProjectPath, model: overrideModel } = options;
 
   // Discover all candidates (noCap) so the session cap applies AFTER filtering out
   // already-processed sessions. Without this, repeated runs stall: the same N newest
   // sessions are discovered every time, all already processed, leaving older unprocessed
   // sessions permanently unreachable.
-  const sessionPaths = await discoverSessions(projectsDir, { ...filter, noCap: true }, currentProjectPath);
+  const discovered = await discoverSessions(projectsDir, { ...filter, noCap: true }, currentProjectPath);
 
   // Skip fully-processed sessions, then apply the per-run cap
   const alreadyProcessed = await loadProcessed();
-  const maxSessions = filter?.all ? sessionPaths.length : (filter?.maxSessions || DEFAULT_MAX_SESSIONS);
-  const toProcess = sessionPaths.filter(p => !alreadyProcessed.has(p)).slice(0, maxSessions);
-  const skipCount = sessionPaths.length - toProcess.length;
+  const maxSessions = filter?.all ? discovered.length : (filter?.maxSessions || DEFAULT_MAX_SESSIONS);
+  const toProcess = discovered.filter(s => !alreadyProcessed.has(s.path)).slice(0, maxSessions);
+  const skipCount = discovered.length - toProcess.length;
   if (skipCount > 0) debug(`backfill: skipping ${skipCount} fully-processed sessions`);
 
   // Check which sessions already completed Pass 1 (from an interrupted previous run)
   const { sessions: pass1Done } = await readAllSignals();
-  const needPass1 = toProcess.filter(p => !pass1Done.has(p));
+  const needPass1 = toProcess.filter(s => !pass1Done.has(s.path));
   const pass1Resumed = toProcess.length - needPass1.length;
   if (pass1Resumed > 0) debug(`backfill: resuming — ${pass1Resumed} sessions already have Pass 1 results`);
 
   const total = toProcess.length;
   debug(`backfill: ${needPass1.length} sessions need Pass 1, ${total} total for synthesis`);
+
+  // Preview: report what will be processed before starting heavy work
+  if (onPreview && toProcess.length > 0) {
+    const mtimes = toProcess.map(s => s.mtime);
+    onPreview({
+      toProcess: toProcess.length,
+      skipped: skipCount,
+      needPass1: needPass1.length,
+      resumed: pass1Resumed,
+      oldest: new Date(Math.min(...mtimes)),
+      newest: new Date(Math.max(...mtimes)),
+    });
+  }
+
+  // Extract paths for processing
+  const toProcessPaths = toProcess.map(s => s.path);
+  const needPass1Paths = needPass1.map(s => s.path);
 
   // --- Pass 1: Extract decision points per session ---
   let extracted = pass1Resumed;
@@ -297,8 +314,8 @@ export async function backfill(projectsDir, options = {}) {
   const RATE_LIMIT_BACKOFF_MS = 10_000;
   const MAX_RATE_LIMIT_RETRIES = 3;
 
-  for (let batchStart = 0; batchStart < needPass1.length && !aborted; batchStart += concurrency) {
-    const batch = needPass1.slice(batchStart, batchStart + concurrency);
+  for (let batchStart = 0; batchStart < needPass1Paths.length && !aborted; batchStart += concurrency) {
+    const batch = needPass1Paths.slice(batchStart, batchStart + concurrency);
 
     // Process batch, collecting rate-limited sessions for retry
     let toRun = batch.map(sessionPath => ({ sessionPath, retries: 0 }));
@@ -354,7 +371,7 @@ export async function backfill(projectsDir, options = {}) {
 
     if (recentFailures >= MAX_CONSECUTIVE_FAILURES) {
       debug(`backfill: aborting Pass 1 — ${MAX_CONSECUTIVE_FAILURES} consecutive failures`);
-      const current = Math.min(batchStart + batch.length, needPass1.length);
+      const current = Math.min(batchStart + batch.length, needPass1Paths.length);
       onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: current + pass1Resumed + skipCount, aborted: true });
       if (extracted === 0) {
         throw new Error('All sessions failed');
@@ -363,7 +380,7 @@ export async function backfill(projectsDir, options = {}) {
       break;
     }
 
-    const current = Math.min(batchStart + batch.length, needPass1.length);
+    const current = Math.min(batchStart + batch.length, needPass1Paths.length);
     onProgress?.({ phase: 'pass1', extracted, skipped, total: total + skipCount, current: current + pass1Resumed + skipCount });
   }
 

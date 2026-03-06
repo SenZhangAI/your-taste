@@ -97,12 +97,25 @@ async function runInit() {
   let lastLog = 0;
   let aborted = false;
 
+  function formatDate(d) {
+    return d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+  }
+
   let result;
   try {
     result = await backfill(PROJECTS_DIR, {
       filter,
       concurrency,
       currentProjectPath: process.cwd(),
+      onPreview({ toProcess, skipped, needPass1, resumed, oldest, newest }) {
+        const range = formatDate(oldest) === formatDate(newest)
+          ? formatDate(oldest)
+          : `${formatDate(oldest)} ~ ${formatDate(newest)}`;
+        console.log(`Found ${toProcess} session${toProcess > 1 ? 's' : ''} to process (${range})`);
+        if (skipped > 0) console.log(`Skipping ${skipped} already processed`);
+        if (resumed > 0) console.log(`Resuming: ${resumed} sessions have partial results from previous run`);
+        console.log('');
+      },
       onProgress({ phase, extracted, skipped, total, current, aborted: a }) {
         if (a) { aborted = true; return; }
         if (phase === 'pass2') {
