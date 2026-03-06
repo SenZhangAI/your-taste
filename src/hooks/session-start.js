@@ -77,6 +77,10 @@ async function main() {
 
 main().catch((e) => {
   debug(`session-start: fatal error — ${e.message}\n${e.stack}`);
+  const isInfra = /timeout|ECONNREFUSED|ECONNRESET|API error [5]\d{2}/i.test(e.message);
+  if (isInfra) {
+    process.exit(0);
+  }
   console.log(JSON.stringify({ result: `your-taste: startup error — ${e.message}` }));
-  process.exit(0);
+  process.exit(2);
 });
