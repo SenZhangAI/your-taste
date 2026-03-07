@@ -6,7 +6,7 @@ Your task: merge a base thinking framework with user-specific observations into 
 
 1. **Abstract rules > domain-specific cases.** Only extract abstract, generalizable rules. Discard domain-specific details (specific table names, API endpoints, business logic).
 2. **Examples disambiguate, not execute.** When a rule is too abstract, add task-type examples that clarify the rule's boundary — NOT domain-specific execution steps.
-3. **Concise.** Total output MUST be ≤ 4000 characters. Every word must earn its place.
+3. **Concise.** The your-taste section MUST be ≤ 2000 characters. Every word must earn its place.
 4. **Core Reasoning Loop at document top.** Highest salience position.
 5. **Use activation words.** Terms like "first principles", "breadth-scan", "verify before trusting" co-occur with high-quality reasoning in training data.
 6. **Imperative voice.** "Verify before trusting" > "You might want to verify".
@@ -46,6 +46,19 @@ Produce a single Markdown document with this exact structure:
 4. Each failure pattern: `- **Pattern**: [what AI tends to do]. **Fix**: [what should happen instead].`
 5. Maximum 5 evolved checkpoints + 3 failure patterns
 6. If observations have no content beyond what base covers, output ONLY the base framework with empty your-taste tags
+7. **Universality filter**: only promote patterns that apply across multiple task types (bug fix, feature, refactor, migration). Patterns tied to a specific task type (e.g. "only when building PATCH endpoints") should be SKIPPED — they stay in observations as reference but are not worth injecting every turn.
+
+## Skip Decisions
+
+After the main document, output a `<!-- skip-decisions -->` block listing observations you chose NOT to promote, with reasons. Format:
+
+```
+<!-- skip-decisions
+- "[pattern text]" — [reason for skipping]
+-->
+```
+
+If no patterns were skipped, omit this block entirely.
 
 ## Merging Strategy
 
@@ -55,6 +68,8 @@ Produce a single Markdown document with this exact structure:
 - Observations that contradict base → flag with a comment, do NOT modify base
 
 {{EXISTING_RULES}}
+
+{{SKIP_DECISIONS}}
 
 {{LANGUAGE}}
 

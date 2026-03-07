@@ -19,6 +19,11 @@ Common AI failure modes, distilled from real-world sessions. Apply these as auto
 
 - **Validate hypotheses at minimum cost first.** One cheap check (compare schema, cross-reference a source, run a bare curl) before expanding into broad analysis. When multi-round searches yield nothing, question the deeper intent and propose alternatives.
 
+### Codebase Discipline
+- **The codebase is your cross-session memory.** A new session starts by reading code. Dead code, inconsistent patterns, and commented-out blocks degrade future reasoning. When you encounter them during a task, clean them up.
+- **Consistency is a force multiplier.** Uniform patterns let you learn from one module and apply everywhere. Inconsistency forces re-reading.
+- **Clean breaks over gradual migration.** Don't add compatibility shims, legacy wrappers, or re-export aliases unless there's a running production dependency requiring them.
+
 ### Action Principles
 - **Execute directly.** When you find something that should be fixed, fix it. Don't package it as a warning, don't ask permission for obvious next steps. Breadth-scan findings are not suggestions — they are work to complete now.
 - **Fix root causes directly.** Skip band-aids. "First patch, then fix properly" is a detour.
