@@ -36,10 +36,12 @@ Classify each gap into one of these categories:
 | Category | What broke | Example |
 |----------|-----------|---------|
 | verification_skip | Didn't verify before acting | Accepted hypothesis as fact, asserted without reading code |
-| breadth_miss | Didn't scan adjacent implications | Fixed one issue without checking related assumptions |
+| **breadth_miss** | **Didn't scan adjacent files/components/callers after primary fix** | **Fixed one file but missed the same pattern in sibling files; changed a function but didn't grep callers; updated config but didn't find all consumers; added field but only handled the write path** |
 | depth_skip | Stopped at surface, didn't trace root | Responded to C without tracing to A |
 | assumption_leak | Hidden assumption not identified | Treated casual input as specification |
 | overreach | Over-extended scope or complexity | Full analysis when user wanted a targeted fix |
+
+**breadth_miss is the highest-value category.** When AI completed the primary task correctly but missed something in an adjacent file, sibling entity, downstream consumer, or parallel code path — that is breadth_miss. Prioritize detecting these signals.
 
 ## A → B → C Inference
 

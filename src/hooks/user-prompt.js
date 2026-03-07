@@ -3,31 +3,33 @@ import { readFile } from 'fs/promises';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { loadGlobalContext, renderGlobalContext } from '../global-context.js';
 import { ensureProjectDir } from '../project.js';
-import { readObservations, extractReasoningCheckpoints } from '../observations.js';
 import { debug } from '../debug.js';
 
 const MAX_CHARS = 4000;
 
+function getThinkingContextPath() {
+  const dir = process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+  return `${dir}/thinking-context.md`;
+}
+
 export async function buildUserPromptContext(projectDir) {
-  // P1: Reasoning checkpoints (evolved) or static framework (bootstrap)
+  // P1: Thinking context (evolved) or base thinking framework (cold start)
   let framework = '';
 
-  // Try evolved checkpoints from observations first
+  // Try evolved thinking-context.md first
   try {
-    const observations = await readObservations();
-    const checkpoints = extractReasoningCheckpoints(observations);
-    if (checkpoints) {
-      framework = `## Reasoning Checkpoints\n\n${checkpoints}`;
-    }
-  } catch { /* no observations */ }
+    framework = await readFile(getThinkingContextPath(), 'utf8');
+    debug('user-prompt: using thinking-context.md');
+  } catch { /* not yet synthesized */ }
 
-  // Fall back to static thinking framework if no evolved checkpoints
+  // Fall back to base thinking framework
   if (!framework) {
     try {
       framework = await readFile(
-        new URL('../../prompts/thinking-framework.md', import.meta.url),
+        new URL('../../prompts/base-thinking.md', import.meta.url),
         'utf8',
       );
+      debug('user-prompt: falling back to base-thinking.md');
     } catch {
       // Template missing — degrade gracefully
     }
@@ -48,8 +50,7 @@ export async function buildUserPromptContext(projectDir) {
   } catch { /* no global context */ }
 
   // Priority-based assembly (lower number = higher priority):
-  // P0: CLAUDE.md confirmed rules (read natively by Claude Code, not injected here)
-  // P1: thinking framework — core reasoning enhancement
+  // P1: thinking-context.md (evolved) or base-thinking.md (cold start) — core reasoning enhancement
   // P2: project context — recent tactical decisions
   // P3: global context — cross-project awareness
   const prioritized = [

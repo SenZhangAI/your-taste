@@ -18,11 +18,33 @@ describe('user-prompt hook priority-based injection', () => {
     await rm(dir, { recursive: true });
   });
 
-  it('returns framework when no other data exists', async () => {
+  it('falls back to base-thinking.md when no thinking-context.md', async () => {
     const projectDir = join(dir, 'projects', 'test');
     await mkdir(projectDir, { recursive: true });
     const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
+    // base-thinking.md contains Core Reasoning Loop
+    expect(result).toContain('Core Reasoning Loop');
+    expect(result).toContain('first principles');
+  });
+
+  it('uses thinking-context.md when available', async () => {
+    await writeFile(join(dir, 'thinking-context.md'), [
+      '## Reasoning Checkpoints',
+      '',
+      '### Core Reasoning Loop',
+      '- **Infer A from C.** Trace back to underlying intent.',
+      '',
+      '<!-- your-taste:start -->',
+      '### Evolved Checkpoints',
+      '- **Custom checkpoint**: user-specific rule',
+      '<!-- your-taste:end -->',
+    ].join('\n'), 'utf8');
+    const projectDir = join(dir, 'projects', 'test');
+    await mkdir(projectDir, { recursive: true });
+
+    const result = await buildUserPromptContext(projectDir);
+    expect(result).toContain('Custom checkpoint');
+    expect(result).toContain('Infer A from C');
   });
 
   it('includes project context when available', async () => {
@@ -30,7 +52,7 @@ describe('user-prompt hook priority-based injection', () => {
     await writeFile(join(projectDir, 'context.md'), '# Project Context\n\n## Recent Decisions\n- [2026-02-28] test decision\n', 'utf8');
 
     const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
+    expect(result).toContain('Core Reasoning Loop');
     expect(result).toContain('test decision');
   });
 
@@ -43,56 +65,13 @@ describe('user-prompt hook priority-based injection', () => {
     expect(result).toContain('cross-project topic');
   });
 
-  it('uses evolved checkpoints from observations instead of static framework', async () => {
-    await writeFile(join(dir, 'observations.md'), [
-      '## Reasoning Checkpoints',
-      '',
-      '- **Abstract-first reasoning**: derives specifics from principles',
-      '',
-      '## Domain Reasoning',
-      '',
-      '- Other content',
-    ].join('\n'), 'utf8');
-    const projectDir = join(dir, 'projects', 'test');
-    await mkdir(projectDir, { recursive: true });
-
-    const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Reasoning Checkpoints');
-    expect(result).toContain('Abstract-first reasoning');
-    expect(result).not.toContain('Intent Inference'); // static framework replaced
-    expect(result).not.toContain('Other content'); // domain reasoning not in user-prompt
-  });
-
-  it('uses legacy thinking patterns header as evolved checkpoints', async () => {
-    await writeFile(join(dir, 'observations.md'), [
-      '## Thinking Patterns',
-      '',
-      '- **Pattern A**: legacy format',
-    ].join('\n'), 'utf8');
-    const projectDir = join(dir, 'projects', 'test');
-    await mkdir(projectDir, { recursive: true });
-
-    const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Reasoning Checkpoints');
-    expect(result).toContain('Pattern A');
-    expect(result).not.toContain('Intent Inference');
-  });
-
-  it('falls back to static framework when no observations', async () => {
-    const projectDir = join(dir, 'projects', 'test');
-    await mkdir(projectDir, { recursive: true });
-
-    const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
-  });
-
   it('drops lower-priority content when exceeding max chars', async () => {
     const projectDir = await ensureProjectDir('/test/project3');
     const largeContext = '# Context\n\n## Recent Decisions\n' + Array.from({ length: 20 }, (_, i) => `- [2026-02-28] ${'y'.repeat(200)} ${i}`).join('\n');
     await writeFile(join(projectDir, 'context.md'), largeContext, 'utf8');
 
     const result = await buildUserPromptContext(projectDir);
-    expect(result).toContain('Intent Inference');
+    expect(result).toContain('Core Reasoning Loop');
     expect(result.length).toBeLessThanOrEqual(5000);
   });
 });

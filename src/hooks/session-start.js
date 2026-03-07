@@ -1,24 +1,59 @@
 #!/usr/bin/env node
-import { renderFromObservations } from '../instruction-renderer.js';
+import { stat } from 'fs/promises';
 import { readObservations } from '../observations.js';
 import { ensureProjectDir } from '../project.js';
 import { loadProjectContext, renderProjectContext } from '../context.js';
 import { readProposals } from '../proposals.js';
+import { synthesizeThinkingContext } from '../synthesize-thinking.js';
 import { debug } from '../debug.js';
 
-const QUALITY_FLOOR = 'Apply these preferences on top of professional best practices. Never compromise error handling at system boundaries, security best practices, or data integrity.';
+function getThinkingContextPath() {
+  const dir = process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+  return `${dir}/thinking-context.md`;
+}
 
-export function buildAdditionalContext(observationsContent, projectContextText) {
-  const sections = [];
+function getObservationsPath() {
+  const dir = process.env.YOUR_TASTE_DIR || `${process.env.HOME}/.your-taste`;
+  return `${dir}/observations.md`;
+}
 
-  const observationsRendered = renderFromObservations(observationsContent);
-  if (observationsRendered) sections.push(observationsRendered);
+async function getMtime(path) {
+  try {
+    const s = await stat(path);
+    return s.mtimeMs;
+  } catch {
+    return 0;
+  }
+}
 
-  sections.push(QUALITY_FLOOR);
+async function maybeResynthesize() {
+  const obsMtime = await getMtime(getObservationsPath());
+  const ctxMtime = await getMtime(getThinkingContextPath());
 
-  if (projectContextText) sections.push(projectContextText);
+  if (obsMtime === 0) {
+    debug('session-start: no observations yet, skipping synthesis');
+    return false;
+  }
 
-  return sections.length > 1 ? sections.join('\n\n') : null;
+  if (ctxMtime > 0 && obsMtime <= ctxMtime) {
+    debug('session-start: thinking-context.md is up to date');
+    return false;
+  }
+
+  debug(`session-start: observations newer than thinking-context (${obsMtime} > ${ctxMtime}), triggering Stage 3`);
+  try {
+    await synthesizeThinkingContext();
+    debug('session-start: Stage 3 synthesis complete');
+    return true;
+  } catch (e) {
+    debug(`session-start: Stage 3 failed — ${e.message}`);
+    return false;
+  }
+}
+
+export function buildAdditionalContext(projectContextText) {
+  if (!projectContextText) return null;
+  return projectContextText;
 }
 
 async function main() {
@@ -28,8 +63,9 @@ async function main() {
   }
 
   debug('session-start: hook triggered');
-  const observationsContent = await readObservations();
-  const hasObservations = !!observationsContent;
+
+  // Stage 3: re-synthesize thinking-context.md if observations changed
+  const resynthesized = await maybeResynthesize();
 
   // Load project-scoped data
   let projectContextText = null;
@@ -47,21 +83,21 @@ async function main() {
   const hasProposals = proposals.length > 0;
 
   const hasProjectCtx = !!projectContextText;
-  debug(`session-start: observations=${hasObservations}, projectCtx=${hasProjectCtx}, proposals=${proposals.length}`);
+  debug(`session-start: projectCtx=${hasProjectCtx}, proposals=${proposals.length}, resynthesized=${resynthesized}`);
 
-  if (!hasObservations && !hasProjectCtx && !hasProposals) {
+  if (!hasProjectCtx && !hasProposals && !resynthesized) {
     debug('session-start: no data to inject, exiting');
     console.log(JSON.stringify({ result: 'your-taste: no data yet' }));
     process.exit(0);
   }
 
-  const additionalContext = buildAdditionalContext(observationsContent, projectContextText);
+  const additionalContext = buildAdditionalContext(projectContextText);
 
   const parts = [];
-  if (hasObservations) parts.push('observations');
+  if (resynthesized) parts.push('thinking-context updated');
   if (hasProjectCtx) parts.push('project context');
 
-  let resultMsg = `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'no data yet'}`;
+  let resultMsg = `your-taste: ${parts.length > 0 ? parts.join(' + ') : 'ready'}`;
   if (hasProposals) {
     resultMsg += ` | ${proposals.length} new rule proposal${proposals.length > 1 ? 's' : ''}, run \`taste review\` to review`;
   }

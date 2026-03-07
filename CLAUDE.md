@@ -26,22 +26,20 @@ Your-taste captures **AI reasoning failures** from collaboration and evolves a t
 3. **Synthesis trigger** — after N new sessions, re-synthesize the evolved thinking framework
 
 ### Core Files
-- **observations.md** — the evolved thinking framework. Three sections:
-  - Reasoning Checkpoints — verification steps AI must take before acting (auto-evolving)
-  - Domain Reasoning — how to reason correctly in specific problem domains (needs review)
-  - Failure Patterns — AI's recurring reasoning errors to prevent (auto-evolving)
+- **thinking-context.md** (`~/.your-taste/`) — the final injectable document (WYSIWYG). Base framework + user-evolved checkpoints/patterns. Injected every turn by UserPromptSubmit hook.
+- **base-thinking.md** (`prompts/`) — universal reasoning baseline. Cold-start fallback when thinking-context.md doesn't exist yet.
+- **observations.md** (`~/.your-taste/`) — Stage 2 intermediate analysis. NOT directly injected. Input to Stage 3 synthesis.
 - **signals.jsonl** — accumulated reasoning gap data from sessions
-- **CLAUDE.md** (`<!-- your-taste:start/end -->`) — user-confirmed behavioral rules, consumed natively by Claude Code
 
-### Three-Layer Injection
-1. **CLAUDE.md** (native) — confirmed rules, read by Claude Code without hooks
-2. **SessionStart** (once) — Domain Reasoning + Failure Patterns from observations
-3. **UserPromptSubmit** (every message) — Reasoning Checkpoints (evolved, replaces static thinking-framework.md when mature)
+### Two-Layer Injection
+1. **SessionStart** (once) — project context + triggers Stage 3 re-synthesis if observations changed
+2. **UserPromptSubmit** (every message) — thinking-context.md (evolved) or base-thinking.md (cold start) + project/global context
 
-### Evolution Mechanism (Hybrid)
-- **Reasoning Checkpoints** + **Failure Patterns**: auto-evolve (low risk, purely additive)
-- **Domain Reasoning**: needs user review before activation (high impact, could change behavior direction)
-- **thinking-framework.md**: bootstrap template for cold start, replaced by observations.md content once 3+ checkpoints accumulated
+### Evolution Pipeline
+- **Stage 1** (SessionEnd): extract reasoning gaps → signals.jsonl
+- **Stage 2** (taste insights): synthesize signals → observations.md
+- **Stage 3** (SessionStart): merge base-thinking.md + observations.md → thinking-context.md
+- **thinking-context.md** uses `<!-- your-taste:start/end -->` tags to mark the continuously-evolving portion
 
 ## Critical Design Constraint: Infer A, Not C
 

@@ -39,24 +39,14 @@ describe('end-to-end: proposals → CLAUDE.md pipeline', () => {
     expect(content).toContain('Clean breaks over gradual migration');
   });
 
-  it('observations inject via session-start without thinking patterns', async () => {
-    await writeFile(`${TEST_DIR}/observations.md`, [
-      '## Thinking Patterns',
-      '',
-      '- **Abstract-first**: thinks in principles',
-      '',
-      '## Working Principles',
-      '',
-      '- **Clean breaks**: prefers rewrites',
-    ].join('\n'));
+  it('session-start injects project context only', async () => {
+    const ctxText = '## Project Context\n\n### Recent Decisions\n- test decision';
+    const context = buildAdditionalContext(ctxText);
+    expect(context).toContain('test decision');
+  });
 
-    const context = buildAdditionalContext(
-      await readFile(`${TEST_DIR}/observations.md`, 'utf8'),
-      null,
-      null,
-    );
-    expect(context).toContain('Clean breaks');
-    expect(context).not.toContain('Abstract-first');
-    expect(context).toContain('error handling'); // quality floor
+  it('session-start returns null without project context', () => {
+    const context = buildAdditionalContext(null);
+    expect(context).toBeNull();
   });
 });

@@ -154,8 +154,9 @@ Trigger: after N new sessions with reasoning gaps accumulated in signals.jsonl, 
 ## TODO
 
 - [ ] Preference capture pipeline — design automated path after reasoning quality pipeline is proven
-- [ ] Contextual checkpoint weighting — inject checkpoints most relevant to current task type
+- [x] Contextual checkpoint weighting — resolved via task-type-aware breadth rules in synthesis prompt (A/B test finding: breadth_miss is the only effective differentiator)
 - [ ] Cross-session pattern validation — verify reasoning checkpoint effectiveness over time
+- [ ] 3-hop reasoning chain mechanism — Case 6 (verify claim → where else is this queried → trace service layer) is beyond single-checkpoint reach, needs a different mechanism
 
 ## Product Identity
 
